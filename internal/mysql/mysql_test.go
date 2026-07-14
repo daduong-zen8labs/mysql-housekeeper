@@ -4,7 +4,7 @@ import "testing"
 
 func TestParseVersion(t *testing.T) {
 	cases := []struct {
-		in          string
+		in           string
 		major, minor int
 	}{
 		{"8.0.36", 8, 0},

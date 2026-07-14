@@ -1,3 +1,5 @@
+// Command mysql-housekeeper moves expired MySQL rows from a primary database
+// to a housekeeping (archive) database.
 package main
 
 import (

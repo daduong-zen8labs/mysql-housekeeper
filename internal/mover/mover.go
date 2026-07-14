@@ -17,10 +17,10 @@ import (
 
 // Options controls a move run.
 type Options struct {
-	DryRun     bool
+	DryRun      bool
 	TableFilter string
-	Logger     *slog.Logger
-	Now        func() time.Time
+	Logger      *slog.Logger
+	Now         func() time.Time
 }
 
 // TableResult summarizes one table's move.
@@ -44,9 +44,9 @@ type RunResult struct {
 
 // Engine moves expired rows from primary to housekeeping.
 type Engine struct {
-	Primary      *sql.DB
-	Housekeeping *sql.DB
-	Cfg          *config.Config
+	Primary       *sql.DB
+	Housekeeping  *sql.DB
+	Cfg           *config.Config
 	PrimarySchema string
 	HouseSchema   string
 }

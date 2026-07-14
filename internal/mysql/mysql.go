@@ -108,10 +108,10 @@ type Column struct {
 
 // TableMeta holds introspected table metadata.
 type TableMeta struct {
-	Schema  string
-	Name    string
-	Columns []Column
-	PK      []string
+	Schema    string
+	Name      string
+	Columns   []Column
+	PK        []string
 	CreateSQL string
 }
 

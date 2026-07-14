@@ -27,22 +27,22 @@ type Endpoint struct {
 
 // Defaults apply when a table does not override them.
 type Defaults struct {
-	BatchSize      int  `yaml:"batch_size"`
-	MaxRowsPerRun  int  `yaml:"max_rows_per_run"`
-	DryRun         bool `yaml:"dry_run"`
-	ThrottleMS     int  `yaml:"throttle_ms"`
-	MaxExecTimeMS  int  `yaml:"max_execution_time_ms"`
+	BatchSize     int  `yaml:"batch_size"`
+	MaxRowsPerRun int  `yaml:"max_rows_per_run"`
+	DryRun        bool `yaml:"dry_run"`
+	ThrottleMS    int  `yaml:"throttle_ms"`
+	MaxExecTimeMS int  `yaml:"max_execution_time_ms"`
 }
 
 // TableCfg describes one table retention policy.
 type TableCfg struct {
-	Name         string   `yaml:"name"`
-	TimeColumn   string   `yaml:"time_column"`
-	Retention    string   `yaml:"retention"`
-	Filter       string   `yaml:"filter"`
-	PrimaryKey   []string `yaml:"primary_key"`
-	BatchSize    *int     `yaml:"batch_size"`
-	MaxRowsPerRun *int    `yaml:"max_rows_per_run"`
+	Name          string   `yaml:"name"`
+	TimeColumn    string   `yaml:"time_column"`
+	Retention     string   `yaml:"retention"`
+	Filter        string   `yaml:"filter"`
+	PrimaryKey    []string `yaml:"primary_key"`
+	BatchSize     *int     `yaml:"batch_size"`
+	MaxRowsPerRun *int     `yaml:"max_rows_per_run"`
 }
 
 var envPlaceholder = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
