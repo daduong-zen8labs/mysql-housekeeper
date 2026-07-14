@@ -80,14 +80,14 @@ func runCmd(cmd string, args []string) int {
 		fmt.Fprintf(os.Stderr, "primary connect: %v\n", err)
 		return exitRuntime
 	}
-	defer primary.Close()
+	defer func() { _ = primary.Close() }()
 
 	house, err := mysqlutil.Open(ctx, cfg.Housekeeping.DSN, cfg.Defaults.MaxExecTimeMS)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "housekeeping connect: %v\n", err)
 		return exitRuntime
 	}
-	defer house.Close()
+	defer func() { _ = house.Close() }()
 
 	engine, err := mover.New(ctx, primary, house, cfg)
 	if err != nil {

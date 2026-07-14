@@ -338,8 +338,7 @@ func (e *Engine) selectBatch(
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
+	defer rows.Close() //nolint:errcheck // rows.Err() checked below
 	var out [][]any
 	for rows.Next() {
 		vals := make([]any, len(cols))
