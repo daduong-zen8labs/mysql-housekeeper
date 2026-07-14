@@ -113,3 +113,20 @@ func TestCutoff(t *testing.T) {
 		t.Fatalf("got %v want %v", cut, want)
 	}
 }
+
+func TestFilterTables(t *testing.T) {
+	cfg := &Config{
+		Tables: []TableCfg{{Name: "a"}, {Name: "b"}},
+	}
+	all, err := cfg.FilterTables("")
+	if err != nil || len(all) != 2 {
+		t.Fatalf("%v %v", all, err)
+	}
+	one, err := cfg.FilterTables("a")
+	if err != nil || len(one) != 1 || one[0].Name != "a" {
+		t.Fatalf("%v %v", one, err)
+	}
+	if _, err := cfg.FilterTables("nope"); err == nil {
+		t.Fatal("expected missing table error")
+	}
+}

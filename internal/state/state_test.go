@@ -2,7 +2,6 @@ package state
 
 import (
 	"context"
-	"database/sql"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -60,38 +59,8 @@ func TestStartFinishRunAndCheckpoint(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rows := sqlmock.NewRows([]string{"last_pk_json", "rows_moved"}).AddRow(`[9]`, 100)
-	mock.ExpectQuery("SELECT last_pk_json, rows_moved FROM hk_checkpoints").
-		WithArgs("logs", int64(42)).WillReturnRows(rows)
-	cp, err := LoadCheckpoint(ctx, db, "logs", 42)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cp == nil || cp.RowsMoved != 100 || len(cp.LastPK) != 1 {
-		t.Fatalf("%+v", cp)
-	}
-
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)
-	}
-}
-
-func TestLoadCheckpointNoRows(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-
-	mock.ExpectQuery("SELECT last_pk_json, rows_moved FROM hk_checkpoints").
-		WithArgs("logs", int64(1)).WillReturnError(sql.ErrNoRows)
-
-	cp, err := LoadCheckpoint(context.Background(), db, "logs", 1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cp != nil {
-		t.Fatalf("want nil, got %+v", cp)
 	}
 }
 

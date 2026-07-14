@@ -2,23 +2,23 @@ package mysqlutil
 
 import "testing"
 
-func TestParseVersion(t *testing.T) {
+func TestParseMajorVersion(t *testing.T) {
 	cases := []struct {
-		in           string
-		major, minor int
+		in    string
+		major int
 	}{
-		{"8.0.36", 8, 0},
-		{"8.4.0-log", 8, 4},
-		{"8.0.36-0ubuntu0.22.04.1", 8, 0},
-		{"5.7.42", 5, 7},
+		{"8.0.36", 8},
+		{"8.4.0-log", 8},
+		{"8.0.36-0ubuntu0.22.04.1", 8},
+		{"5.7.42", 5},
 	}
 	for _, tc := range cases {
-		maj, min, err := parseVersion(tc.in)
+		maj, err := parseMajorVersion(tc.in)
 		if err != nil {
 			t.Fatalf("%q: %v", tc.in, err)
 		}
-		if maj != tc.major || min != tc.minor {
-			t.Fatalf("%q: got %d.%d want %d.%d", tc.in, maj, min, tc.major, tc.minor)
+		if maj != tc.major {
+			t.Fatalf("%q: got %d want %d", tc.in, maj, tc.major)
 		}
 	}
 }

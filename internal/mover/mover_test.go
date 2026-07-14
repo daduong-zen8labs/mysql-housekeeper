@@ -6,33 +6,33 @@ import (
 )
 
 func TestBuildPKGreaterSingle(t *testing.T) {
-	clause, args, err := BuildPKGreater([]string{"id"}, []any{10})
+	p, err := buildPKGreater([]string{"id"}, []any{10})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if clause != "`id` > ?" {
-		t.Fatalf("clause=%q", clause)
+	if p.Clause != "`id` > ?" {
+		t.Fatalf("clause=%q", p.Clause)
 	}
-	if len(args) != 1 || args[0] != 10 {
-		t.Fatalf("args=%v", args)
+	if len(p.Args) != 1 || p.Args[0] != 10 {
+		t.Fatalf("args=%v", p.Args)
 	}
 }
 
 func TestBuildPKGreaterComposite(t *testing.T) {
-	clause, args, err := BuildPKGreater([]string{"a", "b"}, []any{1, 2})
+	p, err := buildPKGreater([]string{"a", "b"}, []any{1, 2})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(clause, "`a` > ?") || !strings.Contains(clause, "`b` > ?") {
-		t.Fatalf("clause=%q", clause)
+	if !strings.Contains(p.Clause, "`a` > ?") || !strings.Contains(p.Clause, "`b` > ?") {
+		t.Fatalf("clause=%q", p.Clause)
 	}
-	if len(args) != 3 {
-		t.Fatalf("args len=%d want 3: %v", len(args), args)
+	if len(p.Args) != 3 {
+		t.Fatalf("args len=%d want 3: %v", len(p.Args), p.Args)
 	}
 }
 
 func TestBuildPKGreaterMismatch(t *testing.T) {
-	if _, _, err := BuildPKGreater([]string{"id"}, []any{1, 2}); err == nil {
+	if _, err := buildPKGreater([]string{"id"}, []any{1, 2}); err == nil {
 		t.Fatal("expected error")
 	}
 }

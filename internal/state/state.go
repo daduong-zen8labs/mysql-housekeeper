@@ -18,7 +18,6 @@ func EnsureDDL(ctx context.Context, db *sql.DB) error {
 			finished_at DATETIME(6) NULL,
 			status VARCHAR(32) NOT NULL,
 			dry_run TINYINT(1) NOT NULL DEFAULT 0,
-			config_hash VARCHAR(64) NULL,
 			error_message TEXT NULL,
 			stats_json JSON NULL
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
@@ -42,9 +41,8 @@ func EnsureDDL(ctx context.Context, db *sql.DB) error {
 
 // Run represents a job execution.
 type Run struct {
-	ID        int64
-	StartedAt time.Time
-	DryRun    bool
+	ID     int64
+	DryRun bool
 }
 
 // StartRun inserts a new job run row.
@@ -60,7 +58,7 @@ func StartRun(ctx context.Context, db *sql.DB, dryRun bool) (*Run, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Run{ID: id, StartedAt: now, DryRun: dryRun}, nil
+	return &Run{ID: id, DryRun: dryRun}, nil
 }
 
 // FinishRun marks a run as completed or failed.
@@ -84,15 +82,7 @@ WHERE id = ?`, now, status, nullIfEmpty(errMsg), string(statsJSON), runID)
 	return err
 }
 
-// Checkpoint holds per-table progress for a run.
-type Checkpoint struct {
-	TableName string
-	RunID     int64
-	LastPK    []any
-	RowsMoved int64
-}
-
-// SaveCheckpoint upserts checkpoint progress.
+// SaveCheckpoint upserts checkpoint progress for observability within a run.
 func SaveCheckpoint(ctx context.Context, db *sql.DB, table string, runID int64, lastPK []any, rowsMoved int64) error {
 	pkJSON, err := json.Marshal(lastPK)
 	if err != nil {
@@ -107,28 +97,6 @@ ON DUPLICATE KEY UPDATE
   updated_at = VALUES(updated_at)`,
 		table, runID, string(pkJSON), rowsMoved, time.Now().UTC())
 	return err
-}
-
-// LoadCheckpoint loads checkpoint for table+run, or nil if none.
-func LoadCheckpoint(ctx context.Context, db *sql.DB, table string, runID int64) (*Checkpoint, error) {
-	var pkJSON sql.NullString
-	var rowsMoved int64
-	err := db.QueryRowContext(ctx, `
-SELECT last_pk_json, rows_moved FROM hk_checkpoints
-WHERE table_name = ? AND run_id = ?`, table, runID).Scan(&pkJSON, &rowsMoved)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	cp := &Checkpoint{TableName: table, RunID: runID, RowsMoved: rowsMoved}
-	if pkJSON.Valid && pkJSON.String != "" && pkJSON.String != "null" {
-		if err := json.Unmarshal([]byte(pkJSON.String), &cp.LastPK); err != nil {
-			return nil, fmt.Errorf("decode last_pk_json: %w", err)
-		}
-	}
-	return cp, nil
 }
 
 func boolToTiny(b bool) int {

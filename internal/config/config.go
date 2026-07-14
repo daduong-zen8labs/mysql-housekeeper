@@ -70,9 +70,6 @@ func Load(path string) (*Config, error) {
 func expandEnv(s string) string {
 	return envPlaceholder.ReplaceAllStringFunc(s, func(m string) string {
 		sub := envPlaceholder.FindStringSubmatch(m)
-		if len(sub) != 2 {
-			return m
-		}
 		if v, ok := os.LookupEnv(sub[1]); ok {
 			return v
 		}
@@ -147,15 +144,7 @@ func ParseRetention(s string) (time.Duration, error) {
 	}
 	m := retentionRe.FindStringSubmatch(s)
 	if m == nil {
-		// Fall back to Go duration (e.g. 90h0m0s) for tests / advanced use.
-		d, err := time.ParseDuration(s)
-		if err != nil {
-			return 0, fmt.Errorf("invalid retention %q (want Nd/Nh/Nm/Ns)", s)
-		}
-		if d <= 0 {
-			return 0, fmt.Errorf("retention must be positive")
-		}
-		return d, nil
+		return 0, fmt.Errorf("invalid retention %q (want Nd/Nh/Nm/Ns)", s)
 	}
 	n, _ := strconv.Atoi(m[1])
 	if n <= 0 {
@@ -170,9 +159,8 @@ func ParseRetention(s string) (time.Duration, error) {
 		return time.Duration(n) * time.Minute, nil
 	case "s":
 		return time.Duration(n) * time.Second, nil
-	default:
-		return 0, fmt.Errorf("invalid unit")
 	}
+	return 0, fmt.Errorf("invalid retention %q (want Nd/Nh/Nm/Ns)", s)
 }
 
 // Cutoff returns now(UTC) - retention.

@@ -30,7 +30,6 @@ type TableResult struct {
 	Copied    int64  `json:"copied"`
 	Deleted   int64  `json:"deleted"`
 	DryRun    bool   `json:"dry_run"`
-	Skipped   bool   `json:"skipped,omitempty"`
 	Error     string `json:"error,omitempty"`
 }
 
@@ -91,11 +90,9 @@ func (e *Engine) Plan(ctx context.Context, opts Options) ([]TableResult, error) 
 		if err != nil {
 			return nil, err
 		}
-		pk, err := mysqlutil.ResolvePK(meta, t.PrimaryKey)
-		if err != nil {
+		if _, err := mysqlutil.ResolvePK(meta, t.PrimaryKey); err != nil {
 			return nil, err
 		}
-		_ = pk
 		if err := assertTimeColumn(meta, t.TimeColumn); err != nil {
 			return nil, err
 		}
@@ -190,17 +187,7 @@ func (e *Engine) moveTable(ctx context.Context, runID int64, t config.TableCfg, 
 	batchSize := e.Cfg.BatchSizeFor(t)
 	maxRows := e.Cfg.MaxRowsFor(t)
 	cols := meta.ColumnNames()
-
 	var cursor []any
-	cp, err := state.LoadCheckpoint(ctx, e.Housekeeping, t.Name, runID)
-	if err != nil {
-		return tr, err
-	}
-	if cp != nil && len(cp.LastPK) > 0 {
-		cursor = cp.LastPK
-		tr.Copied = cp.RowsMoved
-		tr.Deleted = cp.RowsMoved
-	}
 
 	log.Info("move start",
 		"table", t.Name,
@@ -218,7 +205,7 @@ func (e *Engine) moveTable(ctx context.Context, runID int64, t config.TableCfg, 
 		}
 
 		batchStart := time.Now()
-		rows, err := e.selectBatch(ctx, t, meta, pk, cols, cutoff, cursor, limit)
+		rows, err := e.selectBatch(ctx, t, pk, cols, cutoff, cursor, limit)
 		if err != nil {
 			return tr, err
 		}
@@ -241,7 +228,6 @@ func (e *Engine) moveTable(ctx context.Context, runID int64, t config.TableCfg, 
 			if err := e.insertBatch(ctx, t.Name, cols, rows); err != nil {
 				return tr, fmt.Errorf("insert: %w", err)
 			}
-			// Verify all PKs exist in housekeeping before delete.
 			if err := e.verifyPresent(ctx, t.Name, pk, cols, rows); err != nil {
 				return tr, fmt.Errorf("verify: %w", err)
 			}
@@ -306,13 +292,11 @@ func (e *Engine) countExpired(ctx context.Context, t config.TableCfg, cutoff tim
 func (e *Engine) selectBatch(
 	ctx context.Context,
 	t config.TableCfg,
-	meta *mysqlutil.TableMeta,
 	pk, cols []string,
 	cutoff time.Time,
 	cursor []any,
 	limit int,
 ) ([][]any, error) {
-	_ = meta
 	colList := quoteList(cols)
 	q := fmt.Sprintf("SELECT %s FROM %s.%s WHERE %s < ?",
 		colList,
@@ -393,9 +377,6 @@ func buildPKGreater(pk []string, cursor []any) (pkPredicate, error) {
 }
 
 func (e *Engine) insertBatch(ctx context.Context, table string, cols []string, rows [][]any) error {
-	if len(rows) == 0 {
-		return nil
-	}
 	placeholders := "(" + strings.TrimRight(strings.Repeat("?,", len(cols)), ",") + ")"
 	var sb strings.Builder
 	sb.WriteString("INSERT IGNORE INTO ")
@@ -418,9 +399,6 @@ func (e *Engine) insertBatch(ctx context.Context, table string, cols []string, r
 }
 
 func (e *Engine) verifyPresent(ctx context.Context, table string, pk, cols []string, rows [][]any) error {
-	if len(rows) == 0 {
-		return nil
-	}
 	pkIdx := map[string]int{}
 	for i, c := range cols {
 		pkIdx[c] = i
@@ -451,16 +429,12 @@ func (e *Engine) verifyPresent(ctx context.Context, table string, pk, cols []str
 }
 
 func (e *Engine) deleteBatch(ctx context.Context, table string, pk, cols []string, rows [][]any) (int64, error) {
-	if len(rows) == 0 {
-		return 0, nil
-	}
 	pkIdx := map[string]int{}
 	for i, c := range cols {
 		pkIdx[c] = i
 	}
 
 	var total int64
-	// Delete in chunks using OR of PK equality (portable for composite PK).
 	const chunk = 100
 	for i := 0; i < len(rows); i += chunk {
 		end := i + chunk
@@ -518,10 +492,4 @@ func logger(opts Options) *slog.Logger {
 		return opts.Logger
 	}
 	return slog.Default()
-}
-
-// BuildPKGreater is exported for unit tests.
-func BuildPKGreater(pk []string, cursor []any) (string, []any, error) {
-	p, err := buildPKGreater(pk, cursor)
-	return p.Clause, p.Args, err
 }

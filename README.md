@@ -25,7 +25,7 @@ For each configured table:
 2. `INSERT IGNORE` into the housekeeping database (idempotent).
 3. Verify rows exist in housekeeping.
 4. `DELETE` those primary keys from the primary database.
-5. Persist a checkpoint on the housekeeping DB (`hk_checkpoints`).
+5. Persist a progress checkpoint on the housekeeping DB (`hk_checkpoints`) for the current run.
 
 Cross-database XA is **not** used. Safety comes from idempotent copy-then-delete: if the process crashes after insert and before delete, the next run inserts (no-op on duplicates) and deletes again. **At-least-once move, no data loss.**
 

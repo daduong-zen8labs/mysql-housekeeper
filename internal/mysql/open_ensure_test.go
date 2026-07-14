@@ -86,9 +86,9 @@ func TestCurrentSchema(t *testing.T) {
 }
 
 func expectIntrospect(mock sqlmock.Sqlmock, schema, table, createSQL string) {
-	cols := sqlmock.NewRows([]string{"COLUMN_NAME", "COLUMN_TYPE", "IS_NULLABLE", "EXTRA"}).
-		AddRow("id", "bigint unsigned", "NO", "auto_increment").
-		AddRow("created_at", "datetime(6)", "NO", "")
+	cols := sqlmock.NewRows([]string{"COLUMN_NAME", "COLUMN_TYPE"}).
+		AddRow("id", "bigint unsigned").
+		AddRow("created_at", "datetime(6)")
 	mock.ExpectQuery("FROM INFORMATION_SCHEMA.COLUMNS").
 		WithArgs(schema, table).
 		WillReturnRows(cols)
@@ -130,8 +130,8 @@ func TestIntrospectNoPK(t *testing.T) {
 
 	mock.ExpectQuery("FROM INFORMATION_SCHEMA.COLUMNS").
 		WithArgs("app", "heap").
-		WillReturnRows(sqlmock.NewRows([]string{"COLUMN_NAME", "COLUMN_TYPE", "IS_NULLABLE", "EXTRA"}).
-			AddRow("body", "text", "YES", ""))
+		WillReturnRows(sqlmock.NewRows([]string{"COLUMN_NAME", "COLUMN_TYPE"}).
+			AddRow("body", "text"))
 	mock.ExpectQuery("FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE").
 		WithArgs("app", "heap").
 		WillReturnRows(sqlmock.NewRows([]string{"COLUMN_NAME"}))

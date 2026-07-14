@@ -2,7 +2,6 @@ package mover
 
 import (
 	"context"
-	"database/sql"
 	"io"
 	"log/slog"
 	"testing"
@@ -43,10 +42,10 @@ func TestNewEngine(t *testing.T) {
 }
 
 func expectTableIntrospect(mock sqlmock.Sqlmock, schema, table string) {
-	cols := sqlmock.NewRows([]string{"COLUMN_NAME", "COLUMN_TYPE", "IS_NULLABLE", "EXTRA"}).
-		AddRow("id", "bigint unsigned", "NO", "auto_increment").
-		AddRow("created_at", "datetime(6)", "NO", "").
-		AddRow("status", "varchar(32)", "NO", "")
+	cols := sqlmock.NewRows([]string{"COLUMN_NAME", "COLUMN_TYPE"}).
+		AddRow("id", "bigint unsigned").
+		AddRow("created_at", "datetime(6)").
+		AddRow("status", "varchar(32)")
 	mock.ExpectQuery("FROM INFORMATION_SCHEMA.COLUMNS").
 		WithArgs(schema, table).
 		WillReturnRows(cols)
@@ -112,15 +111,9 @@ func TestMoveTableDryRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer primary.Close()
-	house, hmock, err := sqlmock.New()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer house.Close()
 
 	e := &Engine{
 		Primary:       primary,
-		Housekeeping:  house,
 		PrimarySchema: "app",
 		HouseSchema:   "archive",
 		Cfg: &config.Config{
@@ -133,9 +126,6 @@ func TestMoveTableDryRun(t *testing.T) {
 	tcfg := config.TableCfg{Name: "logs", TimeColumn: "created_at", Retention: "7d"}
 
 	expectTableIntrospect(pmock, "app", "logs")
-	hmock.ExpectQuery("SELECT last_pk_json, rows_moved FROM hk_checkpoints").
-		WithArgs("logs", int64(1)).
-		WillReturnError(sql.ErrNoRows)
 
 	pmock.ExpectQuery("SELECT `id`, `created_at`, `status` FROM").
 		WithArgs(cutoff).
@@ -151,9 +141,6 @@ func TestMoveTableDryRun(t *testing.T) {
 		t.Fatalf("%+v", tr)
 	}
 	if err := pmock.ExpectationsWereMet(); err != nil {
-		t.Fatal(err)
-	}
-	if err := hmock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -190,9 +177,6 @@ func TestMoveTableRealBatch(t *testing.T) {
 		WithArgs("archive", "logs").
 		WillReturnRows(sqlmock.NewRows([]string{"COUNT(*)"}).AddRow(1))
 	expectTableIntrospect(hmock, "archive", "logs")
-	hmock.ExpectQuery("SELECT last_pk_json, rows_moved FROM hk_checkpoints").
-		WithArgs("logs", int64(9)).
-		WillReturnError(sql.ErrNoRows)
 
 	pmock.ExpectQuery("SELECT `id`, `created_at`, `status` FROM").
 		WithArgs(cutoff).

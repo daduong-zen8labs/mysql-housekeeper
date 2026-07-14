@@ -66,44 +66,32 @@ func requireMySQL8(ctx context.Context, db *sql.DB) error {
 	if err := db.QueryRowContext(ctx, "SELECT VERSION()").Scan(&ver); err != nil {
 		return fmt.Errorf("VERSION(): %w", err)
 	}
-	major, minor, err := parseVersion(ver)
+	major, err := parseMajorVersion(ver)
 	if err != nil {
 		return fmt.Errorf("parse VERSION %q: %w", ver, err)
 	}
 	if major < 8 {
 		return fmt.Errorf("MySQL >= 8.0 required, got %s", ver)
 	}
-	_ = minor
 	return nil
 }
 
-func parseVersion(ver string) (major, minor int, err error) {
-	// e.g. "8.0.36", "8.4.0-log", "8.0.36-0ubuntu0.22.04.1"
-	parts := strings.SplitN(ver, ".", 3)
-	if len(parts) < 2 {
-		return 0, 0, fmt.Errorf("unexpected version format")
+func parseMajorVersion(ver string) (int, error) {
+	parts := strings.SplitN(ver, ".", 2)
+	if len(parts) < 1 || parts[0] == "" {
+		return 0, fmt.Errorf("unexpected version format")
 	}
-	major, err = strconv.Atoi(parts[0])
+	major, err := strconv.Atoi(parts[0])
 	if err != nil {
-		return 0, 0, err
+		return 0, err
 	}
-	minorStr := parts[1]
-	if i := strings.IndexFunc(minorStr, func(r rune) bool { return r < '0' || r > '9' }); i >= 0 {
-		minorStr = minorStr[:i]
-	}
-	minor, err = strconv.Atoi(minorStr)
-	if err != nil {
-		return 0, 0, err
-	}
-	return major, minor, nil
+	return major, nil
 }
 
 // Column describes a table column.
 type Column struct {
 	Name       string
 	ColumnType string // full COLUMN_TYPE from information_schema
-	Nullable   bool
-	Extra      string
 }
 
 // TableMeta holds introspected table metadata.
@@ -137,7 +125,7 @@ func Introspect(ctx context.Context, db *sql.DB, schema, table string) (*TableMe
 	meta := &TableMeta{Schema: schema, Name: table}
 
 	rows, err := db.QueryContext(ctx, `
-SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, EXTRA
+SELECT COLUMN_NAME, COLUMN_TYPE
 FROM INFORMATION_SCHEMA.COLUMNS
 WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?
 ORDER BY ORDINAL_POSITION`, schema, table)
@@ -147,11 +135,9 @@ ORDER BY ORDINAL_POSITION`, schema, table)
 	defer rows.Close() //nolint:errcheck // rows.Err() checked below
 	for rows.Next() {
 		var c Column
-		var nullable string
-		if err := rows.Scan(&c.Name, &c.ColumnType, &nullable, &c.Extra); err != nil {
+		if err := rows.Scan(&c.Name, &c.ColumnType); err != nil {
 			return nil, err
 		}
-		c.Nullable = nullable == "YES"
 		meta.Columns = append(meta.Columns, c)
 	}
 	if err := rows.Err(); err != nil {
@@ -192,7 +178,7 @@ ORDER BY ORDINAL_POSITION`, schema, table)
 	return meta, nil
 }
 
-// EnsureTable creates dest table LIKE source if missing, then verifies column/PK compatibility.
+// EnsureTable creates dest table from primary SHOW CREATE TABLE if missing, then verifies column/PK compatibility.
 func EnsureTable(ctx context.Context, primary, house *sql.DB, primarySchema, houseSchema, table string) (*TableMeta, error) {
 	src, err := Introspect(ctx, primary, primarySchema, table)
 	if err != nil {
@@ -225,38 +211,18 @@ WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?`, houseSchema, table).Scan(&exists)
 }
 
 func rewriteCreateSQL(createSQL, schema, table string) string {
-	// SHOW CREATE TABLE returns "CREATE TABLE `t` (...)"
-	// Prefix with schema and strip AUTO_INCREMENT=N for a clean copy template.
 	s := createSQL
 	if i := strings.Index(strings.ToUpper(s), "CREATE TABLE"); i >= 0 {
 		s = s[i:]
 	}
-	// Replace first table name with schema.table
-	rest := s
-	upper := strings.ToUpper(rest)
-	idx := strings.Index(upper, "CREATE TABLE")
-	after := rest[idx+len("CREATE TABLE"):]
-	after = strings.TrimSpace(after)
-	// skip optional IF NOT EXISTS
-	if strings.HasPrefix(strings.ToUpper(after), "IF NOT EXISTS") {
-		after = strings.TrimSpace(after[len("IF NOT EXISTS"):])
-	}
-	// skip quoted name
+	after := strings.TrimSpace(s[len("CREATE TABLE"):])
 	if strings.HasPrefix(after, "`") {
-		end := strings.Index(after[1:], "`")
-		if end >= 0 {
+		if end := strings.Index(after[1:], "`"); end >= 0 {
 			after = after[1+end+1:]
-		}
-	} else {
-		parts := strings.Fields(after)
-		if len(parts) > 0 {
-			after = strings.TrimPrefix(after, parts[0])
 		}
 	}
 	out := "CREATE TABLE " + QuoteIdent(schema) + "." + QuoteIdent(table) + after
-	// Drop AUTO_INCREMENT=N table option noise (optional)
 	if j := strings.Index(strings.ToUpper(out), "AUTO_INCREMENT="); j >= 0 {
-		// find end of that token
 		k := j
 		for k < len(out) && out[k] != ' ' && out[k] != '\n' {
 			k++
