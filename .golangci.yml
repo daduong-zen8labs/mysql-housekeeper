@@ -10,6 +10,27 @@ linters:
     - staticcheck
     - unused
     - gofmt
+    - gosimple
+    - revive
+    - misspell
+    - unconvert
+
+linters-settings:
+  revive:
+    rules:
+      - name: blank-imports
+      - name: context-as-argument
+      - name: dot-imports
+      - name: error-return
+      - name: error-strings
+      - name: error-naming
+      - name: exported
+      - name: var-naming
+      - name: package-comments
 
 issues:
   exclude-use-default: false
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - revive

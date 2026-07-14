@@ -1,3 +1,4 @@
+// Package config loads and validates mysql-housekeeper YAML configuration.
 package config
 
 import (

@@ -1,3 +1,4 @@
+// Package mover implements idempotent expiry moves from primary MySQL to a housekeeping database.
 package mover
 
 import (

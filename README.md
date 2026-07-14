@@ -1,6 +1,20 @@
 # mysql-housekeeper
 
+[![CI](https://github.com/nudgeworks/mysql-housekeeper/actions/workflows/ci.yml/badge.svg)](https://github.com/nudgeworks/mysql-housekeeper/actions/workflows/ci.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/nudgeworks/mysql-housekeeper)](https://goreportcard.com/report/github.com/nudgeworks/mysql-housekeeper)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Go Reference](https://pkg.go.dev/badge/github.com/nudgeworks/mysql-housekeeper.svg)](https://pkg.go.dev/github.com/nudgeworks/mysql-housekeeper)
+
 CLI for **MySQL 8+** database housekeeping: move expired rows from a **primary** database to a **housekeeping** (archive) database using per-table YAML retention policies.
+
+## Compared to similar tools
+
+| Tool | Role | Difference |
+|------|------|------------|
+| **mysql-housekeeper** | Config-driven archive move to a **second MySQL** | Idempotent copy→delete batches, checkpoints, dry-run / plan |
+| [pt-archiver](https://docs.percona.com/percona-toolkit/pt-archiver.html) | Row archive / purge | Mature toolkit; often same-server or file; heavier ops surface |
+| mysqldump / mysqlpump | Logical dump | Backup/export oriented, not continuous retention housekeeping |
+| Partition exchange | DDL-based detach | Faster for partitioned tables; out of scope for v1 of this tool |
 
 ## How it works
 
@@ -171,9 +185,20 @@ State tables created on housekeeping:
 
 ```bash
 go test ./...
+go test -race ./...            # requires CGO on some platforms
+./scripts/check.sh             # tests + lint + coverage summary (needs golangci-lint)
+
 # with compose MySQL running:
+docker compose up -d --wait
 go test -tags=integration ./internal/mover/ -count=1 -v
+docker compose down -v
 ```
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), and [SECURITY.md](SECURITY.md).
+
+Releases use [GoReleaser](.goreleaser.yaml): tag `vX.Y.Z` on `main` to publish binaries.
 
 ## Roadmap
 
@@ -184,3 +209,5 @@ go test -tags=integration ./internal/mover/ -count=1 -v
 ## License
 
 Apache License 2.0 — see [LICENSE](LICENSE).
+
+See also [CHANGELOG.md](CHANGELOG.md).

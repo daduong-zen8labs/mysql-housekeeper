@@ -1,3 +1,4 @@
+// Package state persists job runs and per-table checkpoints on the housekeeping database.
 package state
 
 import (
@@ -6,11 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
-)
-
-const (
-	jobRunsTable     = "hk_job_runs"
-	checkpointsTable = "hk_checkpoints"
 )
 
 // EnsureDDL creates housekeeper state tables on the housekeeping database.

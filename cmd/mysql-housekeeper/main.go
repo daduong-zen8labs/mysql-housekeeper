@@ -15,10 +15,13 @@ import (
 	mysqlutil "github.com/nudgeworks/mysql-housekeeper/internal/mysql"
 )
 
+// version is set by GoReleaser via -ldflags.
+var version = "dev"
+
 const (
-	exitOK           = 0
-	exitRuntime      = 1
-	exitConfig       = 2
+	exitOK      = 0
+	exitRuntime = 1
+	exitConfig  = 2
 )
 
 func main() {
@@ -139,6 +142,9 @@ Exit codes: 0 ok, 1 runtime error, 2 config/validation error
 }
 
 func versionString() string {
+	if version != "" && version != "dev" {
+		return version
+	}
 	if bi, ok := debug.ReadBuildInfo(); ok && bi.Main.Version != "" && bi.Main.Version != "(devel)" {
 		return bi.Main.Version
 	}

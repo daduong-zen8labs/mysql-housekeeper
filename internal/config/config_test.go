@@ -87,6 +87,21 @@ func TestValidateRejectsBadFilter(t *testing.T) {
 	}
 }
 
+func TestBatchSizeAndMaxRowsHelpers(t *testing.T) {
+	cfg := &Config{Defaults: Defaults{BatchSize: 1000, MaxRowsPerRun: 5000}}
+	bs := 10
+	mr := 20
+	if cfg.BatchSizeFor(TableCfg{BatchSize: &bs}) != 10 {
+		t.Fatal("batch override")
+	}
+	if cfg.MaxRowsFor(TableCfg{MaxRowsPerRun: &mr}) != 20 {
+		t.Fatal("max override")
+	}
+	if cfg.BatchSizeFor(TableCfg{}) != 1000 || cfg.MaxRowsFor(TableCfg{}) != 5000 {
+		t.Fatal("defaults")
+	}
+}
+
 func TestCutoff(t *testing.T) {
 	now := time.Date(2026, 7, 14, 12, 0, 0, 0, time.UTC)
 	cut, err := Cutoff("90d", now)

@@ -1,3 +1,4 @@
+// Package mysqlutil provides MySQL 8+ helpers: connect, schema introspect, and ensure archive tables.
 package mysqlutil
 
 import (
