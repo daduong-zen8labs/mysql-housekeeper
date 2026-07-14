@@ -1,4 +1,4 @@
-module github.com/nudgeworks/mysql-housekeeper
+module github.com/daduong-zen8labs/mysql-housekeeper
 
 go 1.22
 

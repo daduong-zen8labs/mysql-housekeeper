@@ -10,7 +10,7 @@ Requirements:
 - Docker (for integration tests / demo MySQL)
 
 ```bash
-git clone https://github.com/nudgeworks/mysql-housekeeper.git
+git clone https://github.com/daduong-zen8labs/mysql-housekeeper.git
 cd mysql-housekeeper
 go test ./...
 ```

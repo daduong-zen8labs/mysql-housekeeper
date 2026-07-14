@@ -1,9 +1,10 @@
 # mysql-housekeeper
 
-[![CI](https://github.com/nudgeworks/mysql-housekeeper/actions/workflows/ci.yml/badge.svg)](https://github.com/nudgeworks/mysql-housekeeper/actions/workflows/ci.yml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/nudgeworks/mysql-housekeeper)](https://goreportcard.com/report/github.com/nudgeworks/mysql-housekeeper)
+[![CI](https://github.com/daduong-zen8labs/mysql-housekeeper/actions/workflows/ci.yml/badge.svg)](https://github.com/daduong-zen8labs/mysql-housekeeper/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/daduong-zen8labs/mysql-housekeeper/branch/main/graph/badge.svg)](https://codecov.io/gh/daduong-zen8labs/mysql-housekeeper)
+[![Go Report Card](https://goreportcard.com/badge/github.com/daduong-zen8labs/mysql-housekeeper)](https://goreportcard.com/report/github.com/daduong-zen8labs/mysql-housekeeper)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Go Reference](https://pkg.go.dev/badge/github.com/nudgeworks/mysql-housekeeper.svg)](https://pkg.go.dev/github.com/nudgeworks/mysql-housekeeper)
+[![Go Reference](https://pkg.go.dev/badge/github.com/daduong-zen8labs/mysql-housekeeper.svg)](https://pkg.go.dev/github.com/daduong-zen8labs/mysql-housekeeper)
 
 CLI for **MySQL 8+** database housekeeping: move expired rows from a **primary** database to a **housekeeping** (archive) database using per-table YAML retention policies.
 
@@ -39,7 +40,7 @@ Cutoff times use **UTC** (`SET time_zone = '+00:00'`).
 ## Install
 
 ```bash
-go install github.com/nudgeworks/mysql-housekeeper/cmd/mysql-housekeeper@latest
+go install github.com/daduong-zen8labs/mysql-housekeeper/cmd/mysql-housekeeper@latest
 ```
 
 Or build locally:

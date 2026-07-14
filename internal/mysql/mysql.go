@@ -33,28 +33,32 @@ func Open(ctx context.Context, dsn string, maxExecTimeMS int) (*sql.DB, error) {
 	db.SetMaxIdleConns(5)
 	db.SetConnMaxLifetime(5 * time.Minute)
 
-	pingCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
-	defer cancel()
-	if err := db.PingContext(pingCtx); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("ping: %w", err)
-	}
-
-	if err := requireMySQL8(ctx, db); err != nil {
+	if err := prepareSession(ctx, db, maxExecTimeMS); err != nil {
 		_ = db.Close()
 		return nil, err
 	}
+	return db, nil
+}
+
+// prepareSession pings, requires MySQL 8+, and sets session options.
+func prepareSession(ctx context.Context, db *sql.DB, maxExecTimeMS int) error {
+	pingCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	if err := db.PingContext(pingCtx); err != nil {
+		return fmt.Errorf("ping: %w", err)
+	}
+	if err := requireMySQL8(ctx, db); err != nil {
+		return err
+	}
 	if _, err := db.ExecContext(ctx, "SET time_zone = '+00:00'"); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("set time_zone: %w", err)
+		return fmt.Errorf("set time_zone: %w", err)
 	}
 	if maxExecTimeMS > 0 {
 		if _, err := db.ExecContext(ctx, fmt.Sprintf("SET SESSION max_execution_time = %d", maxExecTimeMS)); err != nil {
-			_ = db.Close()
-			return nil, fmt.Errorf("set max_execution_time: %w", err)
+			return fmt.Errorf("set max_execution_time: %w", err)
 		}
 	}
-	return db, nil
+	return nil
 }
 
 func requireMySQL8(ctx context.Context, db *sql.DB) error {

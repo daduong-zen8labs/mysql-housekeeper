@@ -11,9 +11,9 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 
-	"github.com/nudgeworks/mysql-housekeeper/internal/config"
-	"github.com/nudgeworks/mysql-housekeeper/internal/mover"
-	mysqlutil "github.com/nudgeworks/mysql-housekeeper/internal/mysql"
+	"github.com/daduong-zen8labs/mysql-housekeeper/internal/config"
+	"github.com/daduong-zen8labs/mysql-housekeeper/internal/mover"
+	mysqlutil "github.com/daduong-zen8labs/mysql-housekeeper/internal/mysql"
 )
 
 func TestIntegrationMoveAndIdempotentRerun(t *testing.T) {

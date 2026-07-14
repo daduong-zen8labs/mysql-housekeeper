@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nudgeworks/mysql-housekeeper/internal/config"
-	mysqlutil "github.com/nudgeworks/mysql-housekeeper/internal/mysql"
-	"github.com/nudgeworks/mysql-housekeeper/internal/state"
+	"github.com/daduong-zen8labs/mysql-housekeeper/internal/config"
+	mysqlutil "github.com/daduong-zen8labs/mysql-housekeeper/internal/mysql"
+	"github.com/daduong-zen8labs/mysql-housekeeper/internal/state"
 )
 
 // Options controls a move run.

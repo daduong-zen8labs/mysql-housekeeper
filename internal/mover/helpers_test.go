@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/nudgeworks/mysql-housekeeper/internal/config"
-	mysqlutil "github.com/nudgeworks/mysql-housekeeper/internal/mysql"
+	"github.com/daduong-zen8labs/mysql-housekeeper/internal/config"
+	mysqlutil "github.com/daduong-zen8labs/mysql-housekeeper/internal/mysql"
 )
 
 func TestAssertTimeColumn(t *testing.T) {

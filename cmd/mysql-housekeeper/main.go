@@ -10,9 +10,9 @@ import (
 	"runtime/debug"
 	"time"
 
-	"github.com/nudgeworks/mysql-housekeeper/internal/config"
-	"github.com/nudgeworks/mysql-housekeeper/internal/mover"
-	mysqlutil "github.com/nudgeworks/mysql-housekeeper/internal/mysql"
+	"github.com/daduong-zen8labs/mysql-housekeeper/internal/config"
+	"github.com/daduong-zen8labs/mysql-housekeeper/internal/mover"
+	mysqlutil "github.com/daduong-zen8labs/mysql-housekeeper/internal/mysql"
 )
 
 // version is set by GoReleaser via -ldflags.
