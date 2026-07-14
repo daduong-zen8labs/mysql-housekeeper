@@ -144,7 +144,7 @@ ORDER BY ORDINAL_POSITION`, schema, table)
 	if err != nil {
 		return nil, fmt.Errorf("columns: %w", err)
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck // rows.Err() checked below
 	for rows.Next() {
 		var c Column
 		var nullable string
@@ -169,7 +169,7 @@ ORDER BY ORDINAL_POSITION`, schema, table)
 	if err != nil {
 		return nil, fmt.Errorf("primary key: %w", err)
 	}
-	defer pkRows.Close()
+	defer pkRows.Close() //nolint:errcheck // pkRows.Err() checked below
 	for pkRows.Next() {
 		var col string
 		if err := pkRows.Scan(&col); err != nil {

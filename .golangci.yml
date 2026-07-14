@@ -34,3 +34,4 @@ issues:
     - path: _test\.go
       linters:
         - revive
+        - errcheck
