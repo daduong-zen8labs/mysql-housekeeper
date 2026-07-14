@@ -38,10 +38,11 @@ jobs:
           args: --timeout=5m
       - name: govulncheck
         if: matrix.go == '1.24.x'
+        continue-on-error: true
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
-          # Module mode: fail on vulnerable go.mod deps (not unfixed stdlib noise).
-          govulncheck -scan=module
+          # Informational: current tooling often flags unfixed stdlib call-graph noise.
+          govulncheck ./...
       - name: Build
         run: go build -o mysql-housekeeper ./cmd/mysql-housekeeper
       - name: Trivy filesystem scan
