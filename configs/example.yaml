@@ -1,0 +1,20 @@
+primary:
+  dsn: "${PRIMARY_DSN}"
+housekeeping:
+  dsn: "${HOUSEKEEPING_DSN}"
+
+defaults:
+  batch_size: 1000
+  max_rows_per_run: 500000
+  dry_run: false
+  throttle_ms: 0
+
+tables:
+  - name: notification_logs
+    time_column: created_at
+    retention: 90d
+    filter: "status IN ('sent','failed')"
+
+  - name: audit_events
+    time_column: event_at
+    retention: 180d

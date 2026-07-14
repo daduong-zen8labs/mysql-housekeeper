@@ -1,0 +1,9 @@
+/bin/
+/mysql-housekeeper
+/mysql-housekeeper.exe
+*.exe
+*.test
+*.out
+.idea/
+.vscode/
+.DS_Store

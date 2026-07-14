@@ -1,0 +1,34 @@
+services:
+  primary:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: app
+      MYSQL_USER: housekeeper
+      MYSQL_PASSWORD: housekeeper
+    ports:
+      - "13306:3306"
+    volumes:
+      - ./docker/primary-init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    command: ["--default-authentication-plugin=mysql_native_password", "--character-set-server=utf8mb4"]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  housekeeping:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: archive
+      MYSQL_USER: housekeeper
+      MYSQL_PASSWORD: housekeeper
+    ports:
+      - "13307:3306"
+    command: ["--default-authentication-plugin=mysql_native_password", "--character-set-server=utf8mb4"]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 20

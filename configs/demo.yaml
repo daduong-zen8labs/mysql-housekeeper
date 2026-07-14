@@ -1,0 +1,20 @@
+primary:
+  dsn: "housekeeper:housekeeper@tcp(127.0.0.1:13306)/app?parseTime=true&loc=UTC"
+housekeeping:
+  dsn: "housekeeper:housekeeper@tcp(127.0.0.1:13307)/archive?parseTime=true&loc=UTC"
+
+defaults:
+  batch_size: 100
+  max_rows_per_run: 10000
+  dry_run: false
+  throttle_ms: 0
+
+tables:
+  - name: notification_logs
+    time_column: created_at
+    retention: 90d
+    filter: "status IN ('sent','failed')"
+
+  - name: audit_events
+    time_column: event_at
+    retention: 180d
