@@ -45,7 +45,7 @@ type Defaults struct {
 	DryRun        bool   `yaml:"dry_run"`
 	ThrottleMS    int    `yaml:"throttle_ms"`
 	MaxExecTimeMS int    `yaml:"max_execution_time_ms"`
-	Mode          string `yaml:"mode"`         // move|copy|delete
+	Mode          string `yaml:"mode"`        // move|copy|delete
 	OnConflict    string `yaml:"on_conflict"` // ignore|fail
 }
 
