@@ -1,7 +1,6 @@
 # mysql-housekeeper
 
 [![CI](https://github.com/daduong-zen8labs/mysql-housekeeper/actions/workflows/ci.yml/badge.svg)](https://github.com/daduong-zen8labs/mysql-housekeeper/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/daduong-zen8labs/mysql-housekeeper/branch/main/graph/badge.svg)](https://codecov.io/gh/daduong-zen8labs/mysql-housekeeper)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Go Reference](https://pkg.go.dev/badge/github.com/daduong-zen8labs/mysql-housekeeper.svg)](https://pkg.go.dev/github.com/daduong-zen8labs/mysql-housekeeper)
 

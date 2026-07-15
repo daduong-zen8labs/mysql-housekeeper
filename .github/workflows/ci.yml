@@ -24,12 +24,6 @@ jobs:
         run: |
           go test ./... -coverprofile=coverage.out -covermode=atomic
           go tool cover -func=coverage.out
-      - name: Upload coverage
-        if: matrix.go == '1.24.x'
-        uses: codecov/codecov-action@v4
-        with:
-          files: coverage.out
-          fail_ci_if_error: false
       - name: golangci-lint
         if: matrix.go == '1.24.x'
         uses: golangci/golangci-lint-action@v6
