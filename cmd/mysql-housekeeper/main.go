@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"runtime/debug"
+	"strings"
 	"time"
 
 	"github.com/daduong-zen8labs/mysql-housekeeper/internal/config"
@@ -59,6 +60,8 @@ func runCmd(cmd string, args []string) int {
 	dryRun := fs.Bool("dry-run", false, "estimate/select only; do not insert or delete (run)")
 	table := fs.String("table", "", "process only this table name")
 	mode := fs.String("mode", "", "override mode: move|copy|delete")
+	runKey := fs.String("run-key", "", "stable run key for checkpoints / resume")
+	resume := fs.Bool("resume", false, "continue from last checkpoint for --run-key / defaults.run_key")
 	if err := fs.Parse(args); err != nil {
 		return exitConfig
 	}
@@ -66,11 +69,27 @@ func runCmd(cmd string, args []string) int {
 		fmt.Fprintln(os.Stderr, "-c config path is required")
 		return exitConfig
 	}
+	if *mode != "" {
+		if err := config.ValidateMode(*mode); err != nil {
+			fmt.Fprintf(os.Stderr, "invalid --mode: %v\n", err)
+			return exitConfig
+		}
+	}
 
 	cfg, err := config.Load(*cfgPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "config error: %v\n", err)
 		return exitConfig
+	}
+	if *resume {
+		key := strings.TrimSpace(*runKey)
+		if key == "" {
+			key = strings.TrimSpace(cfg.Defaults.RunKey)
+		}
+		if key == "" {
+			fmt.Fprintln(os.Stderr, "--resume requires --run-key or defaults.run_key in config")
+			return exitConfig
+		}
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -102,6 +121,8 @@ func runCmd(cmd string, args []string) int {
 		DryRun:      *dryRun,
 		TableFilter: *table,
 		Mode:        *mode,
+		RunKey:      *runKey,
+		Resume:      *resume,
 		Logger:      logger,
 		Now:         time.Now,
 	}
@@ -137,7 +158,7 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, `mysql-housekeeper — move expired MySQL rows to a housekeeping database
 
 Usage:
-  mysql-housekeeper run  -c housekeeper.yaml [--dry-run] [--table name] [--mode move|copy|delete]
+  mysql-housekeeper run  -c housekeeper.yaml [--dry-run] [--table name] [--mode move|copy|delete] [--run-key NAME] [--resume]
   mysql-housekeeper plan -c housekeeper.yaml [--table name] [--mode move|copy|delete]
   mysql-housekeeper version
 

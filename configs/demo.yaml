@@ -8,12 +8,17 @@ defaults:
   max_rows_per_run: 10000
   dry_run: false
   throttle_ms: 0
+  mode: move
+  on_conflict: ignore
+  run_key: demo-nightly
 
 tables:
   - name: notification_logs
     time_column: created_at
     retention: 90d
     filter: "status IN ('sent','failed')"
+    filters:
+      - "id > 0"
 
   - name: audit_events
     time_column: event_at

@@ -7,6 +7,21 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-15
+
+### Added
+
+- Flexible policies: `enabled`, `target_table`, `before` (absolute cutoff), `filters`
+- Run modes: `move` | `copy` | `delete` with `on_conflict: ignore|fail`
+- CLI `--mode` validation (invalid values exit 2)
+- Cross-run resume via `defaults.run_key` / `--run-key` and `--resume`
+- Checkpoints keyed by `(table_name, run_key)`
+
+### Changed
+
+- Demo/example configs document mode, on_conflict, and run_key
+- Removed sunset Go Report Card and Codecov badges
+
 ## [0.1.0] - 2026-07-14
 
 ### Added
@@ -20,5 +35,6 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - GoReleaser config for multi-OS/arch binaries
 - OSS hygiene: CONTRIBUTING, CODE_OF_CONDUCT, SECURITY, Dependabot
 
-[Unreleased]: https://github.com/daduong-zen8labs/mysql-housekeeper/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/daduong-zen8labs/mysql-housekeeper/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/daduong-zen8labs/mysql-housekeeper/releases/tag/v0.2.0
 [0.1.0]: https://github.com/daduong-zen8labs/mysql-housekeeper/releases/tag/v0.1.0

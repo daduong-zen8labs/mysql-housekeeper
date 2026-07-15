@@ -20,6 +20,8 @@ type Options struct {
 	DryRun      bool
 	TableFilter string
 	Mode        string // optional CLI override: move|copy|delete
+	RunKey      string // stable id for checkpoints / resume
+	Resume      bool   // continue from last checkpoint for RunKey
 	Logger      *slog.Logger
 	Now         func() time.Time
 }
@@ -33,6 +35,7 @@ type TableResult struct {
 	Copied     int64  `json:"copied"`
 	Deleted    int64  `json:"deleted"`
 	DryRun     bool   `json:"dry_run"`
+	Resumed    bool   `json:"resumed,omitempty"`
 	Skipped    bool   `json:"skipped,omitempty"`
 	SkipReason string `json:"skip_reason,omitempty"`
 	Error      string `json:"error,omitempty"`
@@ -41,6 +44,7 @@ type TableResult struct {
 // RunResult is the overall job stats.
 type RunResult struct {
 	RunID   int64         `json:"run_id"`
+	RunKey  string        `json:"run_key,omitempty"`
 	DryRun  bool          `json:"dry_run"`
 	Tables  []TableResult `json:"tables"`
 	Elapsed string        `json:"elapsed"`
@@ -79,6 +83,24 @@ func (e *Engine) effectiveMode(t config.TableCfg, opts Options) string {
 		return m
 	}
 	return e.Cfg.ModeFor(t)
+}
+
+func resolveRunKey(cfg *config.Config, opts Options) (string, error) {
+	key := strings.TrimSpace(opts.RunKey)
+	if key == "" {
+		key = strings.TrimSpace(cfg.Defaults.RunKey)
+	}
+	if opts.Resume && key == "" {
+		return "", fmt.Errorf("--resume requires --run-key or defaults.run_key")
+	}
+	if key == "" {
+		nowFn := opts.Now
+		if nowFn == nil {
+			nowFn = time.Now
+		}
+		key = fmt.Sprintf("adhoc-%d", nowFn().UTC().UnixNano())
+	}
+	return key, nil
 }
 
 // Plan estimates expired row counts per table (no writes).
@@ -143,10 +165,15 @@ func (e *Engine) Run(ctx context.Context, opts Options) (*RunResult, error) {
 	start := nowFn()
 	dryRun := opts.DryRun || e.Cfg.Defaults.DryRun
 
+	runKey, err := resolveRunKey(e.Cfg, opts)
+	if err != nil {
+		return nil, err
+	}
+
 	if err := state.EnsureDDL(ctx, e.Housekeeping); err != nil {
 		return nil, err
 	}
-	run, err := state.StartRun(ctx, e.Housekeeping, dryRun)
+	run, err := state.StartRun(ctx, e.Housekeeping, dryRun, runKey)
 	if err != nil {
 		return nil, fmt.Errorf("start run: %w", err)
 	}
@@ -157,10 +184,10 @@ func (e *Engine) Run(ctx context.Context, opts Options) (*RunResult, error) {
 		return nil, err
 	}
 
-	result := &RunResult{RunID: run.ID, DryRun: dryRun}
+	result := &RunResult{RunID: run.ID, RunKey: runKey, DryRun: dryRun}
 	var runErr error
 	for _, t := range tables {
-		tr, err := e.moveTable(ctx, run.ID, t, dryRun, nowFn, log, opts)
+		tr, err := e.moveTable(ctx, runKey, t, dryRun, nowFn, log, opts)
 		if err != nil {
 			tr.Error = err.Error()
 			result.Tables = append(result.Tables, tr)
@@ -187,7 +214,7 @@ func (e *Engine) Run(ctx context.Context, opts Options) (*RunResult, error) {
 	return result, nil
 }
 
-func (e *Engine) moveTable(ctx context.Context, runID int64, t config.TableCfg, dryRun bool, nowFn func() time.Time, log *slog.Logger, opts Options) (TableResult, error) {
+func (e *Engine) moveTable(ctx context.Context, runKey string, t config.TableCfg, dryRun bool, nowFn func() time.Time, log *slog.Logger, opts Options) (TableResult, error) {
 	mode := e.effectiveMode(t, opts)
 	conflict := e.Cfg.ConflictFor(t)
 	dest := t.DestName()
@@ -229,15 +256,34 @@ func (e *Engine) moveTable(ctx context.Context, runID int64, t config.TableCfg, 
 	cols := meta.ColumnNames()
 	var cursor []any
 
+	if opts.Resume {
+		cp, err := state.LoadCheckpoint(ctx, e.Housekeeping, t.Name, runKey)
+		if err != nil {
+			return tr, fmt.Errorf("load checkpoint: %w", err)
+		}
+		if cp != nil && (len(cp.LastPK) > 0 || cp.RowsMoved > 0) {
+			tr.Resumed = true
+			cursor = cp.LastPK
+			applyResumedProgress(&tr, mode, cp.RowsMoved)
+			log.Info("resume checkpoint",
+				"table", t.Name,
+				"run_key", runKey,
+				"rows_moved", cp.RowsMoved,
+			)
+		}
+	}
+
 	log.Info("move start",
 		"table", t.Name,
 		"target", dest,
 		"mode", mode,
 		"on_conflict", conflict,
+		"run_key", runKey,
 		"cutoff", cutoff.Format(time.RFC3339),
 		"batch_size", batchSize,
 		"max_rows", maxRows,
 		"dry_run", dryRun,
+		"resume", opts.Resume,
 	)
 
 	for processed(&tr) < int64(maxRows) {
@@ -293,7 +339,7 @@ func (e *Engine) moveTable(ctx context.Context, runID int64, t config.TableCfg, 
 				tr.Deleted += deleted
 			}
 			cursor = pkValues(rows[len(rows)-1], pk, cols)
-			if err := state.SaveCheckpoint(ctx, e.Housekeeping, t.Name, runID, cursor, processed(&tr)); err != nil {
+			if err := state.SaveCheckpoint(ctx, e.Housekeeping, t.Name, runKey, cursor, processed(&tr)); err != nil {
 				return tr, fmt.Errorf("checkpoint: %w", err)
 			}
 			log.Info("batch",
@@ -320,6 +366,18 @@ func (e *Engine) moveTable(ctx context.Context, runID int64, t config.TableCfg, 
 		}
 	}
 	return tr, nil
+}
+
+func applyResumedProgress(tr *TableResult, mode string, rowsMoved int64) {
+	switch mode {
+	case config.ModeDelete:
+		tr.Deleted = rowsMoved
+	case config.ModeCopy:
+		tr.Copied = rowsMoved
+	default:
+		tr.Copied = rowsMoved
+		tr.Deleted = rowsMoved
+	}
 }
 
 func processed(tr *TableResult) int64 {

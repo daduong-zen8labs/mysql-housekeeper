@@ -98,10 +98,13 @@ go run ./cmd/mysql-housekeeper plan -c configs/demo.yaml
 # 2) Dry run: scan batches but do NOT insert/delete
 go run ./cmd/mysql-housekeeper run -c configs/demo.yaml --dry-run
 
-# 3) Real move: copy to archive, then delete from primary
+# 3) Real move (uses defaults.run_key = demo-nightly)
 go run ./cmd/mysql-housekeeper run -c configs/demo.yaml
 
-# 4) Re-run — idempotent; ~0 rows if everything already moved
+# 4) Resume if capped / interrupted
+go run ./cmd/mysql-housekeeper run -c configs/demo.yaml --resume
+
+# 5) Re-run — idempotent; ~0 rows if everything already moved
 go run ./cmd/mysql-housekeeper run -c configs/demo.yaml
 ```
 
@@ -154,12 +157,21 @@ tables:
 
 CLI override: `--mode move|copy|delete`.
 
+**Resume**
+
+Use a stable `defaults.run_key` (or `--run-key`) and `--resume` to continue from `hk_checkpoints` after a crash or when `max_rows_per_run` capped a previous run:
+
+```bash
+mysql-housekeeper run -c housekeeper.yaml --run-key nightly
+mysql-housekeeper run -c housekeeper.yaml --run-key nightly --resume
+```
+
 **Table order matters** when foreign keys exist: list child tables before parents. The tool does **not** disable `foreign_key_checks`.
 
 ## CLI
 
 ```
-mysql-housekeeper run  -c housekeeper.yaml [--dry-run] [--table name] [--mode move|copy|delete]
+mysql-housekeeper run  -c housekeeper.yaml [--dry-run] [--table name] [--mode move|copy|delete] [--run-key NAME] [--resume]
 mysql-housekeeper plan -c housekeeper.yaml [--table name] [--mode move|copy|delete]
 mysql-housekeeper version
 ```

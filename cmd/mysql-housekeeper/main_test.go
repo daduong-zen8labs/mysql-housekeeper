@@ -31,4 +31,7 @@ func TestRunHelpAndUnknown(t *testing.T) {
 	if code := run([]string{"plan"}); code != exitConfig {
 		t.Fatalf("plan without -c=%d", code)
 	}
+	if code := run([]string{"run", "-c", "x.yaml", "--mode", "nope"}); code != exitConfig {
+		t.Fatalf("bad mode=%d", code)
+	}
 }

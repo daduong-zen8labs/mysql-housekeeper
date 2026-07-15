@@ -133,7 +133,7 @@ func TestMoveTableDryRun(t *testing.T) {
 			AddRow(int64(1), fixed.Add(-10*24*time.Hour), "sent").
 			AddRow(int64(2), fixed.Add(-8*24*time.Hour), "sent"))
 
-	tr, err := e.moveTable(context.Background(), 1, tcfg, true, func() time.Time { return fixed }, discardLogger(), Options{})
+	tr, err := e.moveTable(context.Background(), "demo", tcfg, true, func() time.Time { return fixed }, discardLogger(), Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -189,7 +189,7 @@ func TestMoveTableRealBatch(t *testing.T) {
 	pmock.ExpectExec("DELETE FROM").WillReturnResult(sqlmock.NewResult(0, 1))
 	hmock.ExpectExec("INSERT INTO hk_checkpoints").WillReturnResult(sqlmock.NewResult(0, 1))
 
-	tr, err := e.moveTable(context.Background(), 9, tcfg, false, func() time.Time { return fixed }, discardLogger(), Options{})
+	tr, err := e.moveTable(context.Background(), "demo", tcfg, false, func() time.Time { return fixed }, discardLogger(), Options{})
 	if err != nil {
 		t.Fatal(err)
 	}

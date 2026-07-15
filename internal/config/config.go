@@ -47,6 +47,7 @@ type Defaults struct {
 	MaxExecTimeMS int    `yaml:"max_execution_time_ms"`
 	Mode          string `yaml:"mode"`        // move|copy|delete
 	OnConflict    string `yaml:"on_conflict"` // ignore|fail
+	RunKey        string `yaml:"run_key"`     // stable id for cross-run resume
 }
 
 // TableCfg describes one table retention policy.
@@ -186,6 +187,11 @@ func validateMode(m string) error {
 	default:
 		return fmt.Errorf("invalid %q (want move|copy|delete)", m)
 	}
+}
+
+// ValidateMode checks a mode string (CLI or config).
+func ValidateMode(m string) error {
+	return validateMode(m)
 }
 
 func validateConflict(c string) error {

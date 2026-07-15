@@ -10,6 +10,7 @@ defaults:
   throttle_ms: 0
   mode: move            # move | copy | delete
   on_conflict: ignore   # ignore | fail
+  run_key: nightly      # optional; required with --resume
 
 tables:
   - name: notification_logs
