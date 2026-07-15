@@ -37,6 +37,36 @@ func TestParseRetentionInvalid(t *testing.T) {
 	}
 }
 
+func TestParseBefore(t *testing.T) {
+	d, err := ParseBefore("2025-01-15")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := time.Date(2025, 1, 15, 0, 0, 0, 0, time.UTC)
+	if !d.Equal(want) {
+		t.Fatalf("%v", d)
+	}
+	ts, err := ParseBefore("2025-01-15T12:00:00Z")
+	if err != nil || !ts.Equal(time.Date(2025, 1, 15, 12, 0, 0, 0, time.UTC)) {
+		t.Fatalf("%v %v", ts, err)
+	}
+}
+
+func TestCutoffFor(t *testing.T) {
+	now := time.Date(2026, 7, 14, 12, 0, 0, 0, time.UTC)
+	cut, err := CutoffFor(TableCfg{Retention: "90d"}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cut.Equal(now.Add(-90 * 24 * time.Hour)) {
+		t.Fatal(cut)
+	}
+	cut, err = CutoffFor(TableCfg{Before: "2025-06-01"}, now)
+	if err != nil || !cut.Equal(time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)) {
+		t.Fatalf("%v %v", cut, err)
+	}
+}
+
 func TestLoadAndValidate(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "cfg.yaml")
@@ -49,11 +79,17 @@ housekeeping:
   dsn: "${HOUSEKEEPING_DSN}"
 defaults:
   batch_size: 500
+  mode: copy
+  on_conflict: fail
 tables:
   - name: logs
     time_column: created_at
     retention: 7d
     filter: "status = 'done'"
+    filters:
+      - "tenant_id > 0"
+    target_table: logs_archive
+    enabled: true
 `
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
@@ -65,11 +101,12 @@ tables:
 	if cfg.Primary.DSN != "user:pass@tcp(localhost:3306)/primary" {
 		t.Fatalf("dsn expand failed: %q", cfg.Primary.DSN)
 	}
-	if cfg.Defaults.BatchSize != 500 {
-		t.Fatalf("batch_size=%d", cfg.Defaults.BatchSize)
+	if cfg.Defaults.Mode != ModeCopy || cfg.Defaults.OnConflict != ConflictFail {
+		t.Fatalf("%+v", cfg.Defaults)
 	}
-	if len(cfg.Tables) != 1 || cfg.Tables[0].Name != "logs" {
-		t.Fatalf("tables=%+v", cfg.Tables)
+	t0 := cfg.Tables[0]
+	if t0.DestName() != "logs_archive" || len(t0.WhereClauses()) != 2 {
+		t.Fatalf("%+v", t0)
 	}
 }
 
@@ -87,8 +124,25 @@ func TestValidateRejectsBadFilter(t *testing.T) {
 	}
 }
 
+func TestValidateRequiresRetentionXorBefore(t *testing.T) {
+	cfg := &Config{
+		Primary:      Endpoint{DSN: "a"},
+		Housekeeping: Endpoint{DSN: "b"},
+		Tables:       []TableCfg{{Name: "t", TimeColumn: "c"}},
+	}
+	cfg.applyDefaults()
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected retention/before error")
+	}
+	cfg.Tables[0].Retention = "1d"
+	cfg.Tables[0].Before = "2020-01-01"
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected xor error")
+	}
+}
+
 func TestBatchSizeAndMaxRowsHelpers(t *testing.T) {
-	cfg := &Config{Defaults: Defaults{BatchSize: 1000, MaxRowsPerRun: 5000}}
+	cfg := &Config{Defaults: Defaults{BatchSize: 1000, MaxRowsPerRun: 5000, Mode: ModeMove, OnConflict: ConflictIgnore}}
 	bs := 10
 	mr := 20
 	if cfg.BatchSizeFor(TableCfg{BatchSize: &bs}) != 10 {
@@ -99,6 +153,14 @@ func TestBatchSizeAndMaxRowsHelpers(t *testing.T) {
 	}
 	if cfg.BatchSizeFor(TableCfg{}) != 1000 || cfg.MaxRowsFor(TableCfg{}) != 5000 {
 		t.Fatal("defaults")
+	}
+	mode := ModeDelete
+	conf := ConflictFail
+	if cfg.ModeFor(TableCfg{Mode: &mode}) != ModeDelete {
+		t.Fatal("mode override")
+	}
+	if cfg.ConflictFor(TableCfg{OnConflict: &conf}) != ConflictFail {
+		t.Fatal("conflict override")
 	}
 }
 
@@ -128,5 +190,15 @@ func TestFilterTables(t *testing.T) {
 	}
 	if _, err := cfg.FilterTables("nope"); err == nil {
 		t.Fatal("expected missing table error")
+	}
+}
+
+func TestIsEnabled(t *testing.T) {
+	if !(TableCfg{}).IsEnabled() {
+		t.Fatal("default enabled")
+	}
+	f := false
+	if (TableCfg{Enabled: &f}).IsEnabled() {
+		t.Fatal("should be disabled")
 	}
 }

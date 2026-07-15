@@ -162,7 +162,7 @@ func TestEnsureTableCreatesWhenMissing(t *testing.T) {
 	hmock.ExpectExec("CREATE TABLE `archive`.`logs`").WillReturnResult(sqlmock.NewResult(0, 0))
 	expectIntrospect(hmock, "archive", "logs", createSQL)
 
-	meta, err := EnsureTable(context.Background(), primary, house, "app", "archive", "logs")
+	meta, err := EnsureTable(context.Background(), primary, house, "app", "archive", "logs", "logs")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -192,11 +192,11 @@ func TestEnsureTableExistingCompatible(t *testing.T) {
 	createSQL := "CREATE TABLE `logs` (`id` bigint unsigned NOT NULL, PRIMARY KEY (`id`))"
 	expectIntrospect(pmock, "app", "logs", createSQL)
 	hmock.ExpectQuery("FROM INFORMATION_SCHEMA.TABLES").
-		WithArgs("archive", "logs").
+		WithArgs("archive", "logs_archive").
 		WillReturnRows(sqlmock.NewRows([]string{"COUNT(*)"}).AddRow(1))
-	expectIntrospect(hmock, "archive", "logs", createSQL)
+	expectIntrospect(hmock, "archive", "logs_archive", createSQL)
 
-	if _, err := EnsureTable(context.Background(), primary, house, "app", "archive", "logs"); err != nil {
+	if _, err := EnsureTable(context.Background(), primary, house, "app", "archive", "logs", "logs_archive"); err != nil {
 		t.Fatal(err)
 	}
 }

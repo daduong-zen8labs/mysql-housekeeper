@@ -58,6 +58,7 @@ func runCmd(cmd string, args []string) int {
 	cfgPath := fs.String("c", "", "path to housekeeper YAML config")
 	dryRun := fs.Bool("dry-run", false, "estimate/select only; do not insert or delete (run)")
 	table := fs.String("table", "", "process only this table name")
+	mode := fs.String("mode", "", "override mode: move|copy|delete")
 	if err := fs.Parse(args); err != nil {
 		return exitConfig
 	}
@@ -100,6 +101,7 @@ func runCmd(cmd string, args []string) int {
 	opts := mover.Options{
 		DryRun:      *dryRun,
 		TableFilter: *table,
+		Mode:        *mode,
 		Logger:      logger,
 		Now:         time.Now,
 	}
@@ -135,8 +137,8 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, `mysql-housekeeper — move expired MySQL rows to a housekeeping database
 
 Usage:
-  mysql-housekeeper run  -c housekeeper.yaml [--dry-run] [--table name]
-  mysql-housekeeper plan -c housekeeper.yaml [--table name]
+  mysql-housekeeper run  -c housekeeper.yaml [--dry-run] [--table name] [--mode move|copy|delete]
+  mysql-housekeeper plan -c housekeeper.yaml [--table name] [--mode move|copy|delete]
   mysql-housekeeper version
 
 Exit codes: 0 ok, 1 runtime error, 2 config/validation error

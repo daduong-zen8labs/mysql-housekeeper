@@ -128,23 +128,41 @@ defaults:
   max_rows_per_run: 500000
   dry_run: false
   throttle_ms: 0
+  mode: move              # move | copy | delete
+  on_conflict: ignore     # ignore | fail (INSERT into housekeeping)
 tables:
   - name: notification_logs
+    target_table: notification_logs   # optional rename on housekeeping DB
     time_column: created_at
-    retention: 90d          # Nd, Nh, Nm, Ns
-    filter: "status IN ('sent','failed')"  # optional; no leading WHERE; no ';'
-    # primary_key: [id]     # optional override; otherwise discovered via INFORMATION_SCHEMA
+    retention: 90d                    # Nd/Nh/Nm/Ns — XOR with before
+    # before: "2025-01-01"            # absolute UTC cutoff (RFC3339 or YYYY-MM-DD)
+    filter: "status IN ('sent','failed')"
+    filters:                          # extra AND clauses
+      - "id > 0"
+    enabled: true                     # false skips the table
+    # mode: copy                      # per-table override
+    # on_conflict: fail
 ```
 
 `${ENV_VAR}` placeholders in the YAML are expanded from the environment.
+
+**Modes**
+
+| Mode | Housekeeping insert | Primary delete |
+|------|---------------------|----------------|
+| `move` (default) | yes | yes |
+| `copy` | yes | no |
+| `delete` | no | yes (purge) |
+
+CLI override: `--mode move|copy|delete`.
 
 **Table order matters** when foreign keys exist: list child tables before parents. The tool does **not** disable `foreign_key_checks`.
 
 ## CLI
 
 ```
-mysql-housekeeper run  -c housekeeper.yaml [--dry-run] [--table name]
-mysql-housekeeper plan -c housekeeper.yaml [--table name]
+mysql-housekeeper run  -c housekeeper.yaml [--dry-run] [--table name] [--mode move|copy|delete]
+mysql-housekeeper plan -c housekeeper.yaml [--table name] [--mode move|copy|delete]
 mysql-housekeeper version
 ```
 

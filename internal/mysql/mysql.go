@@ -179,8 +179,9 @@ ORDER BY ORDINAL_POSITION`, schema, table)
 }
 
 // EnsureTable creates dest table from primary SHOW CREATE TABLE if missing, then verifies column/PK compatibility.
-func EnsureTable(ctx context.Context, primary, house *sql.DB, primarySchema, houseSchema, table string) (*TableMeta, error) {
-	src, err := Introspect(ctx, primary, primarySchema, table)
+// sourceTable is read from primary; destTable is created/checked on housekeeping (may differ).
+func EnsureTable(ctx context.Context, primary, house *sql.DB, primarySchema, houseSchema, sourceTable, destTable string) (*TableMeta, error) {
+	src, err := Introspect(ctx, primary, primarySchema, sourceTable)
 	if err != nil {
 		return nil, fmt.Errorf("introspect primary: %w", err)
 	}
@@ -188,24 +189,24 @@ func EnsureTable(ctx context.Context, primary, house *sql.DB, primarySchema, hou
 	var exists int
 	err = house.QueryRowContext(ctx, `
 SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
-WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?`, houseSchema, table).Scan(&exists)
+WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?`, houseSchema, destTable).Scan(&exists)
 	if err != nil {
 		return nil, err
 	}
 	if exists == 0 {
 		// CREATE TABLE LIKE cannot cross servers; recreate from SHOW CREATE TABLE.
-		createSQL := rewriteCreateSQL(src.CreateSQL, houseSchema, table)
+		createSQL := rewriteCreateSQL(src.CreateSQL, houseSchema, destTable)
 		if _, err := house.ExecContext(ctx, createSQL); err != nil {
 			return nil, fmt.Errorf("create housekeeping table: %w", err)
 		}
 	}
 
-	dst, err := Introspect(ctx, house, houseSchema, table)
+	dst, err := Introspect(ctx, house, houseSchema, destTable)
 	if err != nil {
 		return nil, fmt.Errorf("introspect housekeeping: %w", err)
 	}
 	if err := compatible(src, dst); err != nil {
-		return nil, fmt.Errorf("schema drift for %s: %w", table, err)
+		return nil, fmt.Errorf("schema drift for %s -> %s: %w", sourceTable, destTable, err)
 	}
 	return src, nil
 }

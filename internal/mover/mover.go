@@ -19,18 +19,23 @@ import (
 type Options struct {
 	DryRun      bool
 	TableFilter string
+	Mode        string // optional CLI override: move|copy|delete
 	Logger      *slog.Logger
 	Now         func() time.Time
 }
 
 // TableResult summarizes one table's move.
 type TableResult struct {
-	Table     string `json:"table"`
-	Estimated int64  `json:"estimated,omitempty"`
-	Copied    int64  `json:"copied"`
-	Deleted   int64  `json:"deleted"`
-	DryRun    bool   `json:"dry_run"`
-	Error     string `json:"error,omitempty"`
+	Table      string `json:"table"`
+	Target     string `json:"target,omitempty"`
+	Mode       string `json:"mode,omitempty"`
+	Estimated  int64  `json:"estimated,omitempty"`
+	Copied     int64  `json:"copied"`
+	Deleted    int64  `json:"deleted"`
+	DryRun     bool   `json:"dry_run"`
+	Skipped    bool   `json:"skipped,omitempty"`
+	SkipReason string `json:"skip_reason,omitempty"`
+	Error      string `json:"error,omitempty"`
 }
 
 // RunResult is the overall job stats.
@@ -69,6 +74,13 @@ func New(ctx context.Context, primary, house *sql.DB, cfg *config.Config) (*Engi
 	}, nil
 }
 
+func (e *Engine) effectiveMode(t config.TableCfg, opts Options) string {
+	if m := strings.ToLower(strings.TrimSpace(opts.Mode)); m != "" {
+		return m
+	}
+	return e.Cfg.ModeFor(t)
+}
+
 // Plan estimates expired row counts per table (no writes).
 func (e *Engine) Plan(ctx context.Context, opts Options) ([]TableResult, error) {
 	log := logger(opts)
@@ -82,7 +94,15 @@ func (e *Engine) Plan(ctx context.Context, opts Options) ([]TableResult, error) 
 	}
 	var out []TableResult
 	for _, t := range tables {
-		cutoff, err := config.Cutoff(t.Retention, nowFn())
+		mode := e.effectiveMode(t, opts)
+		tr := TableResult{Table: t.Name, Target: t.DestName(), Mode: mode, DryRun: true}
+		if !t.IsEnabled() {
+			tr.Skipped = true
+			tr.SkipReason = "enabled=false"
+			out = append(out, tr)
+			continue
+		}
+		cutoff, err := config.CutoffFor(t, nowFn())
 		if err != nil {
 			return nil, err
 		}
@@ -100,8 +120,15 @@ func (e *Engine) Plan(ctx context.Context, opts Options) ([]TableResult, error) 
 		if err != nil {
 			return nil, fmt.Errorf("plan %s: %w", t.Name, err)
 		}
-		log.Info("plan", "table", t.Name, "cutoff", cutoff.Format(time.RFC3339), "estimated", n)
-		out = append(out, TableResult{Table: t.Name, Estimated: n, DryRun: true})
+		log.Info("plan",
+			"table", t.Name,
+			"target", t.DestName(),
+			"mode", mode,
+			"cutoff", cutoff.Format(time.RFC3339),
+			"estimated", n,
+		)
+		tr.Estimated = n
+		out = append(out, tr)
 	}
 	return out, nil
 }
@@ -133,7 +160,7 @@ func (e *Engine) Run(ctx context.Context, opts Options) (*RunResult, error) {
 	result := &RunResult{RunID: run.ID, DryRun: dryRun}
 	var runErr error
 	for _, t := range tables {
-		tr, err := e.moveTable(ctx, run.ID, t, dryRun, nowFn, log)
+		tr, err := e.moveTable(ctx, run.ID, t, dryRun, nowFn, log, opts)
 		if err != nil {
 			tr.Error = err.Error()
 			result.Tables = append(result.Tables, tr)
@@ -160,18 +187,31 @@ func (e *Engine) Run(ctx context.Context, opts Options) (*RunResult, error) {
 	return result, nil
 }
 
-func (e *Engine) moveTable(ctx context.Context, runID int64, t config.TableCfg, dryRun bool, nowFn func() time.Time, log *slog.Logger) (TableResult, error) {
-	tr := TableResult{Table: t.Name, DryRun: dryRun}
-	cutoff, err := config.Cutoff(t.Retention, nowFn())
+func (e *Engine) moveTable(ctx context.Context, runID int64, t config.TableCfg, dryRun bool, nowFn func() time.Time, log *slog.Logger, opts Options) (TableResult, error) {
+	mode := e.effectiveMode(t, opts)
+	conflict := e.Cfg.ConflictFor(t)
+	dest := t.DestName()
+	tr := TableResult{Table: t.Name, Target: dest, Mode: mode, DryRun: dryRun}
+
+	if !t.IsEnabled() {
+		tr.Skipped = true
+		tr.SkipReason = "enabled=false"
+		log.Info("skip table", "table", t.Name, "reason", tr.SkipReason)
+		return tr, nil
+	}
+
+	cutoff, err := config.CutoffFor(t, nowFn())
 	if err != nil {
 		return tr, err
 	}
 
+	needsHouse := mode == config.ModeMove || mode == config.ModeCopy
 	var meta *mysqlutil.TableMeta
-	if dryRun {
+	switch {
+	case dryRun || mode == config.ModeDelete:
 		meta, err = mysqlutil.Introspect(ctx, e.Primary, e.PrimarySchema, t.Name)
-	} else {
-		meta, err = mysqlutil.EnsureTable(ctx, e.Primary, e.Housekeeping, e.PrimarySchema, e.HouseSchema, t.Name)
+	default:
+		meta, err = mysqlutil.EnsureTable(ctx, e.Primary, e.Housekeeping, e.PrimarySchema, e.HouseSchema, t.Name, dest)
 	}
 	if err != nil {
 		return tr, err
@@ -191,15 +231,18 @@ func (e *Engine) moveTable(ctx context.Context, runID int64, t config.TableCfg, 
 
 	log.Info("move start",
 		"table", t.Name,
+		"target", dest,
+		"mode", mode,
+		"on_conflict", conflict,
 		"cutoff", cutoff.Format(time.RFC3339),
 		"batch_size", batchSize,
 		"max_rows", maxRows,
 		"dry_run", dryRun,
 	)
 
-	for tr.Copied < int64(maxRows) {
+	for processed(&tr) < int64(maxRows) {
 		limit := batchSize
-		remaining := int64(maxRows) - tr.Copied
+		remaining := int64(maxRows) - processed(&tr)
 		if int64(limit) > remaining {
 			limit = int(remaining)
 		}
@@ -214,35 +257,49 @@ func (e *Engine) moveTable(ctx context.Context, runID int64, t config.TableCfg, 
 		}
 
 		if dryRun {
-			tr.Copied += int64(len(rows))
-			tr.Deleted += int64(len(rows))
+			switch mode {
+			case config.ModeDelete:
+				tr.Deleted += int64(len(rows))
+			case config.ModeCopy:
+				tr.Copied += int64(len(rows))
+			default: // move
+				tr.Copied += int64(len(rows))
+				tr.Deleted += int64(len(rows))
+			}
 			cursor = pkValues(rows[len(rows)-1], pk, cols)
 			log.Info("dry-run batch",
 				"table", t.Name,
+				"mode", mode,
 				"batch", len(rows),
-				"total", tr.Copied,
+				"processed", processed(&tr),
 				"duration_ms", time.Since(batchStart).Milliseconds(),
 				"dry_run", true,
 			)
 		} else {
-			if err := e.insertBatch(ctx, t.Name, cols, rows); err != nil {
-				return tr, fmt.Errorf("insert: %w", err)
+			if needsHouse {
+				if err := e.insertBatch(ctx, dest, cols, rows, conflict); err != nil {
+					return tr, fmt.Errorf("insert: %w", err)
+				}
+				if err := e.verifyPresent(ctx, dest, pk, cols, rows); err != nil {
+					return tr, fmt.Errorf("verify: %w", err)
+				}
+				tr.Copied += int64(len(rows))
 			}
-			if err := e.verifyPresent(ctx, t.Name, pk, cols, rows); err != nil {
-				return tr, fmt.Errorf("verify: %w", err)
+			if mode == config.ModeMove || mode == config.ModeDelete {
+				deleted, err := e.deleteBatch(ctx, t.Name, pk, cols, rows)
+				if err != nil {
+					return tr, fmt.Errorf("delete: %w", err)
+				}
+				tr.Deleted += deleted
 			}
-			deleted, err := e.deleteBatch(ctx, t.Name, pk, cols, rows)
-			if err != nil {
-				return tr, fmt.Errorf("delete: %w", err)
-			}
-			tr.Copied += int64(len(rows))
-			tr.Deleted += deleted
 			cursor = pkValues(rows[len(rows)-1], pk, cols)
-			if err := state.SaveCheckpoint(ctx, e.Housekeeping, t.Name, runID, cursor, tr.Copied); err != nil {
+			if err := state.SaveCheckpoint(ctx, e.Housekeeping, t.Name, runID, cursor, processed(&tr)); err != nil {
 				return tr, fmt.Errorf("checkpoint: %w", err)
 			}
 			log.Info("batch",
 				"table", t.Name,
+				"target", dest,
+				"mode", mode,
 				"batch", len(rows),
 				"copied", tr.Copied,
 				"deleted", tr.Deleted,
@@ -265,6 +322,13 @@ func (e *Engine) moveTable(ctx context.Context, runID int64, t config.TableCfg, 
 	return tr, nil
 }
 
+func processed(tr *TableResult) int64 {
+	if tr.Copied > tr.Deleted {
+		return tr.Copied
+	}
+	return tr.Deleted
+}
+
 func assertTimeColumn(meta *mysqlutil.TableMeta, timeCol string) error {
 	for _, c := range meta.Columns {
 		if c.Name == timeCol {
@@ -274,18 +338,22 @@ func assertTimeColumn(meta *mysqlutil.TableMeta, timeCol string) error {
 	return fmt.Errorf("time_column %q not found on table %s", timeCol, meta.Name)
 }
 
+func appendWhereFilters(q string, t config.TableCfg) string {
+	for _, f := range t.WhereClauses() {
+		q += " AND (" + f + ")"
+	}
+	return q
+}
+
 func (e *Engine) countExpired(ctx context.Context, t config.TableCfg, cutoff time.Time) (int64, error) {
 	q := fmt.Sprintf("SELECT COUNT(*) FROM %s.%s WHERE %s < ?",
 		mysqlutil.QuoteIdent(e.PrimarySchema),
 		mysqlutil.QuoteIdent(t.Name),
 		mysqlutil.QuoteIdent(t.TimeColumn),
 	)
-	args := []any{cutoff}
-	if f := strings.TrimSpace(t.Filter); f != "" {
-		q += " AND (" + f + ")"
-	}
+	q = appendWhereFilters(q, t)
 	var n int64
-	err := e.Primary.QueryRowContext(ctx, q, args...).Scan(&n)
+	err := e.Primary.QueryRowContext(ctx, q, cutoff).Scan(&n)
 	return n, err
 }
 
@@ -304,10 +372,8 @@ func (e *Engine) selectBatch(
 		mysqlutil.QuoteIdent(t.Name),
 		mysqlutil.QuoteIdent(t.TimeColumn),
 	)
+	q = appendWhereFilters(q, t)
 	args := []any{cutoff}
-	if f := strings.TrimSpace(t.Filter); f != "" {
-		q += " AND (" + f + ")"
-	}
 	if len(cursor) > 0 {
 		tuple, err := buildPKGreater(pk, cursor)
 		if err != nil {
@@ -333,7 +399,6 @@ func (e *Engine) selectBatch(
 		if err := rows.Scan(ptrs...); err != nil {
 			return nil, err
 		}
-		// Normalize []byte to string for stable JSON checkpoint / MySQL driver quirks.
 		for i, v := range vals {
 			if b, ok := v.([]byte); ok {
 				vals[i] = string(b)
@@ -360,7 +425,6 @@ func buildPKGreater(pk []string, cursor []any) (pkPredicate, error) {
 			Args:   []any{cursor[0]},
 		}, nil
 	}
-	// (a > ?) OR (a = ? AND b > ?) OR (a = ? AND b = ? AND c > ?) ...
 	var parts []string
 	var args []any
 	for i := range pk {
@@ -376,10 +440,14 @@ func buildPKGreater(pk []string, cursor []any) (pkPredicate, error) {
 	return pkPredicate{Clause: "(" + strings.Join(parts, " OR ") + ")", Args: args}, nil
 }
 
-func (e *Engine) insertBatch(ctx context.Context, table string, cols []string, rows [][]any) error {
+func (e *Engine) insertBatch(ctx context.Context, table string, cols []string, rows [][]any, conflict string) error {
 	placeholders := "(" + strings.TrimRight(strings.Repeat("?,", len(cols)), ",") + ")"
 	var sb strings.Builder
-	sb.WriteString("INSERT IGNORE INTO ")
+	if conflict == config.ConflictFail {
+		sb.WriteString("INSERT INTO ")
+	} else {
+		sb.WriteString("INSERT IGNORE INTO ")
+	}
 	sb.WriteString(mysqlutil.QuoteIdent(e.HouseSchema))
 	sb.WriteString(".")
 	sb.WriteString(mysqlutil.QuoteIdent(table))

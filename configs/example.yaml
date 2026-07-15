@@ -8,13 +8,22 @@ defaults:
   max_rows_per_run: 500000
   dry_run: false
   throttle_ms: 0
+  mode: move            # move | copy | delete
+  on_conflict: ignore   # ignore | fail
 
 tables:
   - name: notification_logs
+    target_table: notification_logs   # optional rename on housekeeping
     time_column: created_at
-    retention: 90d
+    retention: 90d                    # or use before: "2025-01-01"
     filter: "status IN ('sent','failed')"
+    filters:                          # additional AND clauses
+      - "id > 0"
+    enabled: true
+    # mode: copy
+    # on_conflict: fail
 
   - name: audit_events
     time_column: event_at
-    retention: 180d
+    before: "2025-01-01"              # absolute UTC cutoff (alternative to retention)
+    mode: copy
