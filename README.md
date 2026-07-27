@@ -1,23 +1,39 @@
 # mysql-housekeeper
 
 [![CI](https://github.com/daduong-zen8labs/mysql-housekeeper/actions/workflows/ci.yml/badge.svg)](https://github.com/daduong-zen8labs/mysql-housekeeper/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/daduong-zen8labs/mysql-housekeeper)](https://github.com/daduong-zen8labs/mysql-housekeeper/releases/latest)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Go Reference](https://pkg.go.dev/badge/github.com/daduong-zen8labs/mysql-housekeeper.svg)](https://pkg.go.dev/github.com/daduong-zen8labs/mysql-housekeeper)
 
-CLI for **MySQL 8+** database housekeeping: move expired rows from a **primary** database to a **housekeeping** (archive) database using per-table YAML retention policies.
+**Config-driven MySQL retention:** move (or copy/delete) expired rows from a primary MySQL 8+ database to a separate archive database — safely, in batches, with plan / dry-run / resume.
+
+Retention rules live in YAML. The CLI owns cutoff, keyset pagination, idempotent archive insert, verify, delete, and checkpoints. Run it under cron, Kubernetes CronJob, or ECS.
+
+```bash
+docker compose up -d --wait
+go run ./cmd/mysql-housekeeper plan -c configs/demo.yaml
+go run ./cmd/mysql-housekeeper run  -c configs/demo.yaml --dry-run
+go run ./cmd/mysql-housekeeper run  -c configs/demo.yaml
+```
+
+## Who should use this
+
+**Use it if** you need ongoing primary → second-MySQL archive/purge with a shared config model, crash-safe resume, and a rehearsal path (`plan` / `--dry-run`) before production.
+
+**Skip it if** you only need a one-off dump (`mysqldump`), same-server purge scripts you already trust, or partition exchange / `DROP PARTITION` (faster when tables are already partitioned — out of scope for v1).
 
 ## Compared to similar tools
 
 | Tool | Role | Difference |
 |------|------|------------|
-| **mysql-housekeeper** | Config-driven archive move to a **second MySQL** | Idempotent copy→delete batches, checkpoints, dry-run / plan |
+| **mysql-housekeeper** | Config-driven archive to a **second MySQL** | Idempotent copy→delete, checkpoints, plan/dry-run |
 | [pt-archiver](https://docs.percona.com/percona-toolkit/pt-archiver.html) | Row archive / purge | Mature toolkit; often same-server or file; heavier ops surface |
-| mysqldump / mysqlpump | Logical dump | Backup/export oriented, not continuous retention housekeeping |
-| Partition exchange | DDL-based detach | Faster for partitioned tables; out of scope for v1 of this tool |
+| mysqldump / mysqlpump | Logical dump | Backup/export — not continuous retention |
+| Partition exchange | DDL detach | Faster when partitioned; out of scope for v1 |
 
 ## How it works
 
-For each configured table:
+For each configured table (default mode: `move`):
 
 1. Select expired rows (`time_column < now_utc - retention` [AND optional filter]), paginated by primary key.
 2. `INSERT IGNORE` into the housekeeping database (idempotent).
@@ -36,6 +52,8 @@ Cutoff times use **UTC** (`SET time_zone = '+00:00'`).
 - Go 1.22+ to build from source
 
 ## Install
+
+**Binary** (recommended): download from [Releases](https://github.com/daduong-zen8labs/mysql-housekeeper/releases/latest).
 
 ```bash
 go install github.com/daduong-zen8labs/mysql-housekeeper/cmd/mysql-housekeeper@latest
@@ -56,15 +74,10 @@ docker run --rm mysql-housekeeper version
 
 ## Quickstart (docker compose)
 
-### 1. Create / start local MySQL databases
-
-From the repo root:
+### 1. Start local MySQL databases
 
 ```bash
-# create & start primary + housekeeping MySQL 8 containers
 docker compose up -d --wait
-
-# check status
 docker compose ps
 ```
 
@@ -75,40 +88,36 @@ docker compose ps
 
 Ports **13306** / **13307** avoid clashing with a local MySQL on 3306. Seed data is loaded from `docker/primary-init.sql` on first start.
 
-Optional — connect with the MySQL client:
-
 ```bash
 mysql -h 127.0.0.1 -P 13306 -u housekeeper -phousekeeper app
 mysql -h 127.0.0.1 -P 13307 -u housekeeper -phousekeeper archive
 ```
 
-Reset demo data (wipe volumes and recreate):
+Reset demo data:
 
 ```bash
 docker compose down -v
 docker compose up -d --wait
 ```
 
-### 2. Run housekeeper against the demo DBs
+### 2. Run against the demo
 
 ```bash
-# 1) Count expired rows (no writes)
+# Count expired rows (no writes)
 go run ./cmd/mysql-housekeeper plan -c configs/demo.yaml
 
-# 2) Dry run: scan batches but do NOT insert/delete
+# Scan batches; do NOT insert/delete
 go run ./cmd/mysql-housekeeper run -c configs/demo.yaml --dry-run
 
-# 3) Real move (uses defaults.run_key = demo-nightly)
+# Real move (defaults.run_key = demo-nightly)
 go run ./cmd/mysql-housekeeper run -c configs/demo.yaml
 
-# 4) Resume if capped / interrupted
+# Resume if capped / interrupted
 go run ./cmd/mysql-housekeeper run -c configs/demo.yaml --resume
 
-# 5) Re-run — idempotent; ~0 rows if everything already moved
+# Re-run — idempotent; ~0 rows if everything already moved
 go run ./cmd/mysql-housekeeper run -c configs/demo.yaml
 ```
-
-Stop when done:
 
 ```bash
 docker compose down        # keep data volumes
