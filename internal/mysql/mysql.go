@@ -12,7 +12,9 @@ import (
 	"github.com/go-sql-driver/mysql"
 )
 
-// Open connects and requires MySQL >= 8.0, sets UTC session timezone.
+// Open connects and requires MySQL >= 8.0.
+// Session time_zone (+00:00) and optional max_execution_time are set via DSN
+// system-variable params so every pooled connection inherits them.
 func Open(ctx context.Context, dsn string, maxExecTimeMS int) (*sql.DB, error) {
 	cfg, err := mysql.ParseDSN(dsn)
 	if err != nil {
@@ -23,6 +25,11 @@ func Open(ctx context.Context, dsn string, maxExecTimeMS int) (*sql.DB, error) {
 	}
 	cfg.Params["parseTime"] = "true"
 	cfg.Params["loc"] = "UTC"
+	// Quoted value becomes SET time_zone='+00:00' on each new connection.
+	cfg.Params["time_zone"] = "'+00:00'"
+	if maxExecTimeMS > 0 {
+		cfg.Params["max_execution_time"] = strconv.Itoa(maxExecTimeMS)
+	}
 	cfg.InterpolateParams = true
 
 	db, err := sql.Open("mysql", cfg.FormatDSN())
@@ -33,15 +40,15 @@ func Open(ctx context.Context, dsn string, maxExecTimeMS int) (*sql.DB, error) {
 	db.SetMaxIdleConns(5)
 	db.SetConnMaxLifetime(5 * time.Minute)
 
-	if err := prepareSession(ctx, db, maxExecTimeMS); err != nil {
+	if err := prepareSession(ctx, db); err != nil {
 		_ = db.Close()
 		return nil, err
 	}
 	return db, nil
 }
 
-// prepareSession pings, requires MySQL 8+, and sets session options.
-func prepareSession(ctx context.Context, db *sql.DB, maxExecTimeMS int) error {
+// prepareSession pings and requires MySQL 8+.
+func prepareSession(ctx context.Context, db *sql.DB) error {
 	pingCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	if err := db.PingContext(pingCtx); err != nil {
@@ -49,14 +56,6 @@ func prepareSession(ctx context.Context, db *sql.DB, maxExecTimeMS int) error {
 	}
 	if err := requireMySQL8(ctx, db); err != nil {
 		return err
-	}
-	if _, err := db.ExecContext(ctx, "SET time_zone = '+00:00'"); err != nil {
-		return fmt.Errorf("set time_zone: %w", err)
-	}
-	if maxExecTimeMS > 0 {
-		if _, err := db.ExecContext(ctx, fmt.Sprintf("SET SESSION max_execution_time = %d", maxExecTimeMS)); err != nil {
-			return fmt.Errorf("set max_execution_time: %w", err)
-		}
 	}
 	return nil
 }
