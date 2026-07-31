@@ -4,7 +4,6 @@ package mover
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -173,6 +172,16 @@ func (e *Engine) Run(ctx context.Context, opts Options) (*RunResult, error) {
 	if err := state.EnsureDDL(ctx, e.Housekeeping); err != nil {
 		return nil, err
 	}
+	releaseLock, err := state.TryAcquireRunLock(ctx, e.Housekeeping, runKey)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err := releaseLock(); err != nil {
+			log.Error("release run lock", "err", err, "run_key", runKey)
+		}
+	}()
+
 	run, err := state.StartRun(ctx, e.Housekeeping, dryRun, runKey)
 	if err != nil {
 		return nil, fmt.Errorf("start run: %w", err)
@@ -255,6 +264,7 @@ func (e *Engine) moveTable(ctx context.Context, runKey string, t config.TableCfg
 	maxRows := e.Cfg.MaxRowsFor(t)
 	cols := meta.ColumnNames()
 	var cursor []any
+	var alreadyMoved int64
 
 	if opts.Resume {
 		cp, err := state.LoadCheckpoint(ctx, e.Housekeeping, t.Name, runKey)
@@ -264,6 +274,7 @@ func (e *Engine) moveTable(ctx context.Context, runKey string, t config.TableCfg
 		if cp != nil && (len(cp.LastPK) > 0 || cp.RowsMoved > 0) {
 			tr.Resumed = true
 			cursor = cp.LastPK
+			alreadyMoved = cp.RowsMoved
 			applyResumedProgress(&tr, mode, cp.RowsMoved)
 			log.Info("resume checkpoint",
 				"table", t.Name,
@@ -286,9 +297,12 @@ func (e *Engine) moveTable(ctx context.Context, runKey string, t config.TableCfg
 		"resume", opts.Resume,
 	)
 
-	for processed(&tr) < int64(maxRows) {
+	// max_rows_per_run is a per-invocation budget; resumed progress is excluded so
+	// nightly --resume can continue after a previous cap.
+	limitTotal := alreadyMoved + int64(maxRows)
+	for processed(&tr) < limitTotal {
 		limit := batchSize
-		remaining := int64(maxRows) - processed(&tr)
+		remaining := limitTotal - processed(&tr)
 		if int64(limit) > remaining {
 			limit = int(remaining)
 		}
@@ -525,30 +539,41 @@ func (e *Engine) insertBatch(ctx context.Context, table string, cols []string, r
 }
 
 func (e *Engine) verifyPresent(ctx context.Context, table string, pk, cols []string, rows [][]any) error {
+	if len(rows) == 0 {
+		return nil
+	}
 	pkIdx := map[string]int{}
 	for i, c := range cols {
 		pkIdx[c] = i
 	}
-	for _, row := range rows {
-		conds := make([]string, len(pk))
-		args := make([]any, len(pk))
-		for i, p := range pk {
-			conds[i] = mysqlutil.QuoteIdent(p) + " = ?"
-			args[i] = row[pkIdx[p]]
+	const chunk = 100
+	for i := 0; i < len(rows); i += chunk {
+		end := i + chunk
+		if end > len(rows) {
+			end = len(rows)
 		}
-		q := fmt.Sprintf("SELECT 1 FROM %s.%s WHERE %s LIMIT 1",
+		part := rows[i:end]
+		var ors []string
+		var args []any
+		for _, row := range part {
+			ands := make([]string, len(pk))
+			for j, p := range pk {
+				ands[j] = mysqlutil.QuoteIdent(p) + " = ?"
+				args = append(args, row[pkIdx[p]])
+			}
+			ors = append(ors, "("+strings.Join(ands, " AND ")+")")
+		}
+		q := fmt.Sprintf("SELECT COUNT(*) FROM %s.%s WHERE %s",
 			mysqlutil.QuoteIdent(e.HouseSchema),
 			mysqlutil.QuoteIdent(table),
-			strings.Join(conds, " AND "),
+			strings.Join(ors, " OR "),
 		)
-		var one int
-		err := e.Housekeeping.QueryRowContext(ctx, q, args...).Scan(&one)
-		if err == sql.ErrNoRows {
-			pkVals, _ := json.Marshal(pkValues(row, pk, cols))
-			return fmt.Errorf("row not found in housekeeping after insert pk=%s", string(pkVals))
-		}
-		if err != nil {
+		var n int64
+		if err := e.Housekeeping.QueryRowContext(ctx, q, args...).Scan(&n); err != nil {
 			return err
+		}
+		if n != int64(len(part)) {
+			return fmt.Errorf("verify: found %d/%d rows in housekeeping after insert for table %s", n, len(part), table)
 		}
 	}
 	return nil

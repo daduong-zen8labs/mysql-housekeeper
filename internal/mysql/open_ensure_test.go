@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/go-sql-driver/mysql"
 )
 
 func TestOpenInvalidDSN(t *testing.T) {
@@ -24,10 +25,8 @@ func TestPrepareSessionOK(t *testing.T) {
 	mock.ExpectPing()
 	mock.ExpectQuery("SELECT VERSION\\(\\)").
 		WillReturnRows(sqlmock.NewRows([]string{"VERSION()"}).AddRow("8.0.36"))
-	mock.ExpectExec("SET time_zone = '\\+00:00'").WillReturnResult(sqlmock.NewResult(0, 0))
-	mock.ExpectExec("SET SESSION max_execution_time = 1000").WillReturnResult(sqlmock.NewResult(0, 0))
 
-	if err := prepareSession(context.Background(), db, 1000); err != nil {
+	if err := prepareSession(context.Background(), db); err != nil {
 		t.Fatal(err)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
@@ -46,8 +45,34 @@ func TestPrepareSessionRejectsMySQL5(t *testing.T) {
 	mock.ExpectQuery("SELECT VERSION\\(\\)").
 		WillReturnRows(sqlmock.NewRows([]string{"VERSION()"}).AddRow("5.7.42"))
 
-	if err := prepareSession(context.Background(), db, 0); err == nil {
+	if err := prepareSession(context.Background(), db); err == nil {
 		t.Fatal("expected version error")
+	}
+}
+
+func TestOpenAppliesSessionParams(t *testing.T) {
+	cfg, err := mysql.ParseDSN("u:p@tcp(127.0.0.1:3306)/db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Mirror Open's DSN mutation without connecting.
+	if cfg.Params == nil {
+		cfg.Params = map[string]string{}
+	}
+	cfg.Params["parseTime"] = "true"
+	cfg.Params["loc"] = "UTC"
+	cfg.Params["time_zone"] = "'+00:00'"
+	cfg.Params["max_execution_time"] = "1000"
+	dsn := cfg.FormatDSN()
+	parsed, err := mysql.ParseDSN(dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsed.Params["time_zone"] != "'+00:00'" {
+		t.Fatalf("time_zone=%q", parsed.Params["time_zone"])
+	}
+	if parsed.Params["max_execution_time"] != "1000" {
+		t.Fatalf("max_execution_time=%q", parsed.Params["max_execution_time"])
 	}
 }
 

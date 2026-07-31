@@ -42,6 +42,18 @@ archives:
 checksum:
   name_template: checksums.txt
 
+dockers:
+  - id: mysql-housekeeper-amd64
+    ids:
+      - mysql-housekeeper
+    goos: linux
+    goarch: amd64
+    image_templates:
+      - "ghcr.io/daduong-zen8labs/mysql-housekeeper:{{ .Version }}"
+      - "ghcr.io/daduong-zen8labs/mysql-housekeeper:{{ .Tag }}"
+      - "ghcr.io/daduong-zen8labs/mysql-housekeeper:latest"
+    dockerfile: Dockerfile.goreleaser
+
 changelog:
   sort: asc
   filters:

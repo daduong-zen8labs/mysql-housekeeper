@@ -1,0 +1,107 @@
+# Example Kubernetes CronJob for mysql-housekeeper.
+# Adjust image, schedule, secrets, and config to match your cluster.
+#
+# Ops notes:
+# - concurrencyPolicy: Forbid prevents overlapping runs for the same CronJob.
+# - Prefer a stable defaults.run_key (or --run-key) so --resume can continue after caps/crashes.
+# - The binary also takes a MySQL GET_LOCK on run_key to fail fast if another instance is running.
+# - DSNs are secrets; mount config from a ConfigMap with ${PRIMARY_DSN}/${HOUSEKEEPING_DSN} placeholders.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysql-housekeeper-config
+  labels:
+    app.kubernetes.io/name: mysql-housekeeper
+data:
+  housekeeper.yaml: |
+    primary:
+      dsn: "${PRIMARY_DSN}"
+    housekeeping:
+      dsn: "${HOUSEKEEPING_DSN}"
+    defaults:
+      batch_size: 1000
+      max_rows_per_run: 500000
+      throttle_ms: 0
+      mode: move
+      on_conflict: ignore
+      run_key: nightly
+    tables:
+      - name: notification_logs
+        time_column: created_at
+        retention: 90d
+        enabled: true
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mysql-housekeeper-dsn
+  labels:
+    app.kubernetes.io/name: mysql-housekeeper
+type: Opaque
+stringData:
+  # Replace with real DSNs (or use sealed-secrets / external-secrets).
+  PRIMARY_DSN: "housekeeper:REPLACE@tcp(primary.example:3306)/app?parseTime=true&loc=UTC"
+  HOUSEKEEPING_DSN: "housekeeper:REPLACE@tcp(archive.example:3306)/archive?parseTime=true&loc=UTC"
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: mysql-housekeeper
+  labels:
+    app.kubernetes.io/name: mysql-housekeeper
+spec:
+  schedule: "0 3 * * *" # 03:00 UTC daily
+  timeZone: "UTC" # requires Kubernetes >= 1.27
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  startingDeadlineSeconds: 300
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      ttlSecondsAfterFinished: 86400
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: mysql-housekeeper
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: mysql-housekeeper
+              # Prefer a released image, or build from this repo's Dockerfile.
+              image: ghcr.io/daduong-zen8labs/mysql-housekeeper:0.2.0
+              imagePullPolicy: IfNotPresent
+              args:
+                - run
+                - -c
+                - /etc/mysql-housekeeper/housekeeper.yaml
+                # Uncomment after a capped / interrupted run:
+                # - --resume
+              envFrom:
+                - secretRef:
+                    name: mysql-housekeeper-dsn
+              volumeMounts:
+                - name: config
+                  mountPath: /etc/mysql-housekeeper
+                  readOnly: true
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  cpu: "1"
+                  memory: 256Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+          volumes:
+            - name: config
+              configMap:
+                name: mysql-housekeeper-config

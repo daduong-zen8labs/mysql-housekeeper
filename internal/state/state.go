@@ -3,7 +3,9 @@ package state
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -69,6 +71,48 @@ type Run struct {
 	ID     int64
 	DryRun bool
 	RunKey string
+}
+
+// TryAcquireRunLock takes a MySQL named lock for runKey (timeout 0 = fail immediately).
+// The lock is held on a dedicated connection until release is called (required with sql.DB pooling).
+// Prevents overlapping CronJob/process instances from racing on the same run_key.
+func TryAcquireRunLock(ctx context.Context, db *sql.DB, runKey string) (release func() error, err error) {
+	if runKey == "" {
+		return func() error { return nil }, nil
+	}
+	name := runLockName(runKey)
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("lock conn: %w", err)
+	}
+	var got sql.NullInt64
+	if err := conn.QueryRowContext(ctx, "SELECT GET_LOCK(?, 0)", name).Scan(&got); err != nil {
+		_ = conn.Close()
+		return nil, fmt.Errorf("GET_LOCK: %w", err)
+	}
+	if !got.Valid || got.Int64 != 1 {
+		_ = conn.Close()
+		return nil, fmt.Errorf("another run is in progress for run_key %q", runKey)
+	}
+	return func() error {
+		defer func() { _ = conn.Close() }()
+		var released sql.NullInt64
+		if err := conn.QueryRowContext(context.Background(), "SELECT RELEASE_LOCK(?)", name).Scan(&released); err != nil {
+			return fmt.Errorf("RELEASE_LOCK: %w", err)
+		}
+		return nil
+	}, nil
+}
+
+// runLockName builds a MySQL GET_LOCK name (<= 64 chars).
+func runLockName(runKey string) string {
+	const prefix = "hk:"
+	const maxLen = 64
+	if len(prefix)+len(runKey) <= maxLen {
+		return prefix + runKey
+	}
+	sum := sha256.Sum256([]byte(runKey))
+	return prefix + hex.EncodeToString(sum[:])[:maxLen-len(prefix)]
 }
 
 // StartRun inserts a new job run row.
