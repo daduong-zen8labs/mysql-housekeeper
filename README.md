@@ -72,6 +72,7 @@ docker build -t mysql-housekeeper .
 docker run --rm mysql-housekeeper version
 ```
 
+Release tags also publish `ghcr.io/daduong-zen8labs/mysql-housekeeper` (see GitHub Packages).
 ## Quickstart (docker compose)
 
 ### 1. Start local MySQL databases
@@ -168,7 +169,7 @@ CLI override: `--mode move|copy|delete`.
 
 **Resume**
 
-Use a stable `defaults.run_key` (or `--run-key`) and `--resume` to continue from `hk_checkpoints` after a crash or when `max_rows_per_run` capped a previous run:
+Use a stable `defaults.run_key` (or `--run-key`) and `--resume` to continue from `hk_checkpoints` after a crash or when `max_rows_per_run` capped a previous run. `max_rows_per_run` is a **per-invocation** budget: prior checkpoint progress does not consume it.
 
 ```bash
 mysql-housekeeper run -c housekeeper.yaml --run-key nightly
@@ -206,10 +207,11 @@ Run under any scheduler that can execute a container or binary periodically:
 0 3 * * * PRIMARY_DSN=... HOUSEKEEPING_DSN=... /usr/local/bin/mysql-housekeeper run -c /etc/housekeeper.yaml
 ```
 
-**Kubernetes CronJob** — mount the config ConfigMap and set DSNs via Secrets as env vars.
+**Kubernetes CronJob** — see [`examples/k8s/cronjob.yaml`](examples/k8s/cronjob.yaml) (ConfigMap + Secret DSNs, `concurrencyPolicy: Forbid`). The binary also takes a MySQL `GET_LOCK` on `run_key` so overlapping processes fail fast.
 
 **ECS scheduled task** — same pattern: task role + secrets for DSNs, invoke `run -c ...`.
 
+Overlapping runs with the same `run_key` are rejected. Use a stable `defaults.run_key` and `--resume` after `max_rows_per_run` caps or interruptions.
 ## Schema on housekeeping
 
 If the target table is missing, the tool recreates it from the primary `SHOW CREATE TABLE` output. If it exists, column types and primary key must match; otherwise the run fails with a schema-drift error.

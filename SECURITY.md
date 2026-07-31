@@ -30,6 +30,7 @@ We aim to acknowledge reports within **7 days** and coordinate a fix and disclos
 - Treat MySQL DSNs as secrets (use env expansion `${PRIMARY_DSN}`)
 - Prefer least-privilege DB users:
   - Primary: `SELECT`, `DELETE` on archived tables
-  - Housekeeping: `SELECT`, `INSERT`, `CREATE`, `UPDATE` (for state tables / schema ensure)
+  - Housekeeping: `SELECT`, `INSERT`, `CREATE`, `UPDATE` (for state tables / schema ensure); `GET_LOCK` / `RELEASE_LOCK` (run overlap guard)
 - Do not commit production credentials
 - Review `filter` expressions carefully (they are interpolated into SQL `AND (...)` clauses)
+- Avoid overlapping schedulers for the same `run_key` (CronJob `concurrencyPolicy: Forbid` + in-process lock)
