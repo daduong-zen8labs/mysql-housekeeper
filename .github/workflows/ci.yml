@@ -26,7 +26,7 @@ jobs:
           go tool cover -func=coverage.out
       - name: golangci-lint
         if: matrix.go == '1.24.x'
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v9
         with:
           version: v1.64.8
           args: --timeout=5m
