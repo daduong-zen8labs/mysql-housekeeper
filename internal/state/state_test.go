@@ -83,6 +83,47 @@ func TestStartFinishRunAndCheckpoint(t *testing.T) {
 	}
 }
 
+func TestTryAcquireRunLock(t *testing.T) {
+	release, err := TryAcquireRunLock(context.Background(), nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := release(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTryAcquireRunLockBusy(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	mock.ExpectQuery("SELECT GET_LOCK").WithArgs("hk:nightly").
+		WillReturnRows(sqlmock.NewRows([]string{"GET_LOCK(?, 0)"}).AddRow(0))
+
+	_, err = TryAcquireRunLock(context.Background(), db, "nightly")
+	if err == nil {
+		t.Fatal("expected busy error")
+	}
+}
+
+func TestRunLockName(t *testing.T) {
+	short := runLockName("nightly")
+	if short != "hk:nightly" {
+		t.Fatalf("%q", short)
+	}
+	longKey := ""
+	for i := 0; i < 80; i++ {
+		longKey += "a"
+	}
+	name := runLockName(longKey)
+	if len(name) > 64 || name[:3] != "hk:" {
+		t.Fatalf("%q len=%d", name, len(name))
+	}
+}
+
 func TestSaveCheckpointRequiresRunKey(t *testing.T) {
 	if err := SaveCheckpoint(context.Background(), nil, "t", "", nil, 0); err == nil {
 		t.Fatal("expected error")
