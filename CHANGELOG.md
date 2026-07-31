@@ -7,17 +7,22 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-31
+
+### Fixed
+
+- Session `time_zone` / `max_execution_time` applied via DSN params on every pooled connection (previously only the initial ping connection)
+- `max_rows_per_run` is a per-invocation budget when using `--resume` (prior checkpoint progress no longer consumes the budget)
+
 ### Added
 
 - Kubernetes CronJob example (`examples/k8s/cronjob.yaml`) with Forbid concurrency and Secret/ConfigMap pattern
 - MySQL `GET_LOCK` guard so overlapping runs with the same `run_key` fail fast
 - GoReleaser Docker image publish to `ghcr.io/daduong-zen8labs/mysql-housekeeper`
 - Integration tests for resume-after-cap, copy/delete modes, `on_conflict: fail`, and run lock
-- `max_rows_per_run` is per-invocation when using `--resume` (prior checkpoint progress no longer consumes the budget)
 
 ### Changed
 
-- Session `time_zone` / `max_execution_time` applied via DSN params on every pooled connection
 - `verifyPresent` uses batched `COUNT(*)` instead of per-row `SELECT 1`
 - Release workflow runs unit/race tests before GoReleaser; Go version aligned with CI (1.24.x)
 
@@ -49,6 +54,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - GoReleaser config for multi-OS/arch binaries
 - OSS hygiene: CONTRIBUTING, CODE_OF_CONDUCT, SECURITY, Dependabot
 
-[Unreleased]: https://github.com/daduong-zen8labs/mysql-housekeeper/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/daduong-zen8labs/mysql-housekeeper/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/daduong-zen8labs/mysql-housekeeper/releases/tag/v0.3.0
 [0.2.0]: https://github.com/daduong-zen8labs/mysql-housekeeper/releases/tag/v0.2.0
 [0.1.0]: https://github.com/daduong-zen8labs/mysql-housekeeper/releases/tag/v0.1.0
