@@ -7,6 +7,20 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added
+
+- Kubernetes CronJob example (`examples/k8s/cronjob.yaml`) with Forbid concurrency and Secret/ConfigMap pattern
+- MySQL `GET_LOCK` guard so overlapping runs with the same `run_key` fail fast
+- GoReleaser Docker image publish to `ghcr.io/daduong-zen8labs/mysql-housekeeper`
+- Integration tests for resume-after-cap, copy/delete modes, `on_conflict: fail`, and run lock
+- `max_rows_per_run` is per-invocation when using `--resume` (prior checkpoint progress no longer consumes the budget)
+
+### Changed
+
+- Session `time_zone` / `max_execution_time` applied via DSN params on every pooled connection
+- `verifyPresent` uses batched `COUNT(*)` instead of per-row `SELECT 1`
+- Release workflow runs unit/race tests before GoReleaser; Go version aligned with CI (1.24.x)
+
 ## [0.2.0] - 2026-07-15
 
 ### Added

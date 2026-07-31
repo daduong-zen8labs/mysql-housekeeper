@@ -1,0 +1,4 @@
+# Used by GoReleaser — binary is copied in; do not build from source here.
+FROM gcr.io/distroless/static-debian12:nonroot
+COPY mysql-housekeeper /mysql-housekeeper
+ENTRYPOINT ["/mysql-housekeeper"]

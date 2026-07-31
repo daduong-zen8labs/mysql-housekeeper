@@ -7,9 +7,23 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.x"
+      - name: Unit tests with race
+        run: go test -race ./... -count=1
+      - name: Build
+        run: go build -o mysql-housekeeper ./cmd/mysql-housekeeper
+
   goreleaser:
+    needs: quality
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,7 +31,13 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.22.x"
+          go-version: "1.24.x"
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
