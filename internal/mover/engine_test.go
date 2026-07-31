@@ -184,8 +184,8 @@ func TestMoveTableRealBatch(t *testing.T) {
 			AddRow(int64(1), fixed.Add(-10*24*time.Hour), "sent"))
 
 	hmock.ExpectExec("INSERT IGNORE INTO").WillReturnResult(sqlmock.NewResult(0, 1))
-	hmock.ExpectQuery("SELECT 1 FROM").WithArgs(int64(1)).
-		WillReturnRows(sqlmock.NewRows([]string{"1"}).AddRow(1))
+	hmock.ExpectQuery("SELECT COUNT\\(\\*\\) FROM").WithArgs(int64(1)).
+		WillReturnRows(sqlmock.NewRows([]string{"COUNT(*)"}).AddRow(1))
 	pmock.ExpectExec("DELETE FROM").WillReturnResult(sqlmock.NewResult(0, 1))
 	hmock.ExpectExec("INSERT INTO hk_checkpoints").WillReturnResult(sqlmock.NewResult(0, 1))
 
