@@ -7,6 +7,22 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added
+
+- Cancel `run`/`plan` on `SIGINT` / `SIGTERM` (`signal.NotifyContext`)
+
+### Changed
+
+- README config section points at `configs/example.yaml` instead of duplicating YAML
+- CONTRIBUTING links to README for test commands
+- Example CronJob image tag bumped to `0.3.0`
+- Ignore local agent/docs paths in `.gitignore`
+
+### Removed
+
+- Unused `config.Cutoff` helper (superseded by `CutoffFor`)
+- README Roadmap stubs (track ideas in issues when planned)
+
 ## [0.3.0] - 2026-07-31
 
 ### Fixed

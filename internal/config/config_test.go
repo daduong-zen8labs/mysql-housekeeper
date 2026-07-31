@@ -164,18 +164,6 @@ func TestBatchSizeAndMaxRowsHelpers(t *testing.T) {
 	}
 }
 
-func TestCutoff(t *testing.T) {
-	now := time.Date(2026, 7, 14, 12, 0, 0, 0, time.UTC)
-	cut, err := Cutoff("90d", now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := now.Add(-90 * 24 * time.Hour)
-	if !cut.Equal(want) {
-		t.Fatalf("got %v want %v", cut, want)
-	}
-}
-
 func TestFilterTables(t *testing.T) {
 	cfg := &Config{
 		Tables: []TableCfg{{Name: "a"}, {Name: "b"}},

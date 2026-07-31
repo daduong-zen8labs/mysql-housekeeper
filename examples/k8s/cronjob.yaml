@@ -74,7 +74,7 @@ spec:
           containers:
             - name: mysql-housekeeper
               # Prefer a released image, or build from this repo's Dockerfile.
-              image: ghcr.io/daduong-zen8labs/mysql-housekeeper:0.2.0
+              image: ghcr.io/daduong-zen8labs/mysql-housekeeper:0.3.0
               imagePullPolicy: IfNotPresent
               args:
                 - run

@@ -13,3 +13,11 @@ dist/
 
 coverage
 
+# Local / agent / internal notes (not part of the product)
+.agents/
+.claude/
+.specstory/
+.cursorindexingignore
+skills-lock.json
+docs/
+

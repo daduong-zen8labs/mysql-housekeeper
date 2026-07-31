@@ -127,35 +127,9 @@ docker compose down -v     # also delete data volumes
 
 ## Config
 
-See `configs/example.yaml`:
+Full reference: [`configs/example.yaml`](configs/example.yaml) (env placeholders like `${PRIMARY_DSN}`).
 
-```yaml
-primary:
-  dsn: "${PRIMARY_DSN}"
-housekeeping:
-  dsn: "${HOUSEKEEPING_DSN}"
-defaults:
-  batch_size: 1000
-  max_rows_per_run: 500000
-  dry_run: false
-  throttle_ms: 0
-  mode: move              # move | copy | delete
-  on_conflict: ignore     # ignore | fail (INSERT into housekeeping)
-tables:
-  - name: notification_logs
-    target_table: notification_logs   # optional rename on housekeeping DB
-    time_column: created_at
-    retention: 90d                    # Nd/Nh/Nm/Ns — XOR with before
-    # before: "2025-01-01"            # absolute UTC cutoff (RFC3339 or YYYY-MM-DD)
-    filter: "status IN ('sent','failed')"
-    filters:                          # extra AND clauses
-      - "id > 0"
-    enabled: true                     # false skips the table
-    # mode: copy                      # per-table override
-    # on_conflict: fail
-```
-
-`${ENV_VAR}` placeholders in the YAML are expanded from the environment.
+Demo (hardcoded local DSNs): [`configs/demo.yaml`](configs/demo.yaml).
 
 **Modes**
 
@@ -238,13 +212,7 @@ docker compose down -v
 
 See [CONTRIBUTING.md](CONTRIBUTING.md), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), and [SECURITY.md](SECURITY.md).
 
-Releases use [GoReleaser](.goreleaser.yaml): tag `vX.Y.Z` on `main` to publish binaries.
-
-## Roadmap
-
-- Partition exchange / detach mode
-- Purge / second-tier retention on housekeeping
-- Prometheus metrics endpoint
+Releases use [GoReleaser](.goreleaser.yaml): tag `vX.Y.Z` on `main` to publish binaries and the GHCR image.
 
 ## License
 
