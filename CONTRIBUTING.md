@@ -15,6 +15,8 @@ cd mysql-housekeeper
 go test ./...
 ```
 
+For race, coverage, and integration commands, see [README → Tests](README.md#tests).
+
 ## Coding conventions
 
 - Format with `gofmt` (CI enforces `gofmt` via golangci-lint)
@@ -23,29 +25,12 @@ go test ./...
 - No secrets in commits; use `${ENV}` placeholders in sample configs
 - Demo credentials in `docker-compose.yml` / `configs/demo.yaml` are **local demo only**
 
-## Tests
-
-```bash
-# unit tests
-go test ./...
-
-# with the race detector (requires CGO on some platforms)
-go test -race ./...
-
-# coverage
-go test ./... -coverprofile=coverage.out
-go tool cover -func=coverage.out
-
-# integration (needs compose MySQL)
-docker compose up -d --wait
-go test -tags=integration ./internal/mover/ -count=1 -v
-docker compose down -v
-```
-
-Lint locally (optional):
+Optional local lint:
 
 ```bash
 golangci-lint run
+# or
+./scripts/check.sh
 ```
 
 ## Pull requests

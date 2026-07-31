@@ -335,15 +335,6 @@ func CutoffFor(t TableCfg, now time.Time) (time.Time, error) {
 	return now.UTC().Add(-d), nil
 }
 
-// Cutoff returns now(UTC) - retention.
-func Cutoff(retention string, now time.Time) (time.Time, error) {
-	d, err := ParseRetention(retention)
-	if err != nil {
-		return time.Time{}, err
-	}
-	return now.UTC().Add(-d), nil
-}
-
 // FilterTables returns tables matching name, or all if name is empty.
 func (c *Config) FilterTables(name string) ([]TableCfg, error) {
 	if name == "" {

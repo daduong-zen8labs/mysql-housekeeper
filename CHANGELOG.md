@@ -20,11 +20,21 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - MySQL `GET_LOCK` guard so overlapping runs with the same `run_key` fail fast
 - GoReleaser Docker image publish to `ghcr.io/daduong-zen8labs/mysql-housekeeper`
 - Integration tests for resume-after-cap, copy/delete modes, `on_conflict: fail`, and run lock
+- Cancel `run`/`plan` on `SIGINT` / `SIGTERM` (`signal.NotifyContext`)
 
 ### Changed
 
 - `verifyPresent` uses batched `COUNT(*)` instead of per-row `SELECT 1`
 - Release workflow runs unit/race tests before GoReleaser; Go version aligned with CI (1.24.x)
+- README config section points at `configs/example.yaml` instead of duplicating YAML
+- CONTRIBUTING links to README for test commands
+- Example CronJob image tag bumped to `0.3.0`
+- Ignore local agent/docs paths in `.gitignore`
+
+### Removed
+
+- Unused `config.Cutoff` helper (superseded by `CutoffFor`)
+- README Roadmap stubs (track ideas in issues when planned)
 
 ## [0.2.0] - 2026-07-15
 
